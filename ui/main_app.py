@@ -49,12 +49,14 @@ class FinancePlannerApp(tk.Tk):
         bg = self.theme.get("background", "#ffffff")
         fg = self.theme.get("foreground", "#000000")
         accent = self.theme.get("accent", "#2563eb")
+        table = self.theme.get("table", {})
+        row_bg = table.get("row_bg", bg)
         self.configure(bg=bg)
         self.style.theme_use("default")
         self.style.configure("TFrame", background=bg)
         self.style.configure("TLabel", background=bg, foreground=fg)
         self.style.configure("TButton", background=accent, foreground=fg, padding=6)
-        self.style.configure("Treeview", background=self.theme["table"]["row_bg"], foreground=fg, fieldbackground=self.theme["table"]["row_bg"])
+        self.style.configure("Treeview", background=row_bg, foreground=fg, fieldbackground=row_bg)
         self.style.map("TButton", background=[("active", accent)])
 
     def _load_data(self) -> None:
@@ -306,7 +308,6 @@ class ItemDialog:
             ("Price vs Similar (1-5)", "price_comp"),
             ("Effect (1-5)", "effect"),
             ("Justification", "justification"),
-            ("Recurrence", "recurrence"),
         ]
         self.date_var = tk.StringVar(value=datetime.now().strftime(self.app.date_fmt))
         ttk.Label(self.top, text="Date").grid(row=0, column=0, sticky="w", **pad)
@@ -319,6 +320,27 @@ class ItemDialog:
             entry.grid(row=row, column=1, sticky="ew", **pad)
             self.entries[key] = entry
             row += 1
+
+        ttk.Label(self.top, text="Recurrence").grid(row=row, column=0, sticky="w", **pad)
+        self.recurrence_var = tk.StringVar(value="none")
+        recurrence_options = [
+            "none",
+            "once",
+            "weekly",
+            "biweekly",
+            "monthly",
+            "quarterly",
+            "yearly",
+            "custom-date",
+        ]
+        self.recurrence_combo = ttk.Combobox(
+            self.top,
+            textvariable=self.recurrence_var,
+            values=recurrence_options,
+            state="readonly",
+        )
+        self.recurrence_combo.grid(row=row, column=1, sticky="ew", **pad)
+        self.recurrence_combo.bind("<<ComboboxSelected>>", self._maybe_prompt_custom_date)
 
         ttk.Button(self.top, text="Save", command=self._save).grid(row=row, column=0, columnspan=2, pady=8)
         self.top.columnconfigure(1, weight=1)
@@ -335,7 +357,10 @@ class ItemDialog:
         self.entries["price_comp"].insert(0, str(item.price_comp))
         self.entries["effect"].insert(0, str(item.effect))
         self.entries["justification"].insert(0, item.justification)
-        self.entries["recurrence"].insert(0, item.recurrence)
+        if item.recurrence:
+            self.recurrence_var.set(item.recurrence)
+        else:
+            self.recurrence_var.set("none")
 
     def _save(self) -> None:
         try:
@@ -362,10 +387,20 @@ class ItemDialog:
             price_comp=price_comp,
             effect=effect,
             justification=self.entries["justification"].get(),
-            recurrence=self.entries["recurrence"].get(),
+            recurrence=self.recurrence_var.get(),
         )
         self.result = record
         self.top.destroy()
+
+    def _maybe_prompt_custom_date(self, event=None):
+        if self.recurrence_var.get() != "custom-date":
+            return
+        prompt = "Enter custom recurrence date (YYYY-MM-DD):"
+        value = simpledialog.askstring("Custom date", prompt, parent=self.top)
+        if value:
+            self.recurrence_var.set(value)
+        else:
+            self.recurrence_var.set("none")
 
 
 class ItemViewer:

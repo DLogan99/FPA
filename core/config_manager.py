@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from typing import Any, Dict, Optional
 
 
@@ -12,9 +13,10 @@ class ConfigManager:
         weights_path: str = "config/weights.json",
         themes_path: str = "config/themes.json",
     ) -> None:
-        self.settings_path = settings_path
-        self.weights_path = weights_path
-        self.themes_path = themes_path
+        self.base_dir = getattr(sys, "_MEIPASS", os.getcwd())
+        self.settings_path = self._rel(settings_path)
+        self.weights_path = self._rel(weights_path)
+        self.themes_path = self._rel(themes_path)
         self.settings = self._load_json(self.settings_path, default={})
         self.weights = self._load_json(self.weights_path, default={})
         self.themes = self._load_json(self.themes_path, default={})
@@ -27,13 +29,18 @@ class ConfigManager:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
 
+    def _rel(self, path: str) -> str:
+        if os.path.isabs(path):
+            return path
+        return os.path.join(self.base_dir, path)
+
     def _apply_defaults(self) -> None:
         self.settings.setdefault(
             "paths",
             {
-                "items_csv": "data/items.csv",
-                "money_csv": "data/money.csv",
-                "backup_dir": "backups",
+                "items_csv": os.path.join(self.base_dir, "data", "items.csv"),
+                "money_csv": os.path.join(self.base_dir, "data", "money.csv"),
+                "backup_dir": os.path.join(self.base_dir, "backups"),
             },
         )
         self.settings.setdefault(
@@ -75,6 +82,14 @@ class ConfigManager:
             ],
         )
         self.weights.setdefault("urgency_override", 5)
+        # ensure every theme has table defaults to avoid KeyError when packed
+        for name, theme in list(self.themes.items()):
+            theme.setdefault("table", {})
+            table = theme["table"]
+            table.setdefault("header_bg", theme.get("background", "#ffffff"))
+            table.setdefault("header_fg", theme.get("foreground", "#000000"))
+            table.setdefault("row_bg", theme.get("background", "#ffffff"))
+            table.setdefault("alt_row_bg", theme.get("background", "#ffffff"))
 
     def save_settings(self) -> None:
         os.makedirs(os.path.dirname(self.settings_path), exist_ok=True)
@@ -93,7 +108,24 @@ class ConfigManager:
 
     def get_theme(self, name: Optional[str] = None) -> Dict[str, Any]:
         theme_name = name or self.settings.get("themes", {}).get("default", "light")
-        return self.themes.get(theme_name, self.themes.get("light", {}))
+        base = self.themes.get("light", {})
+        selected = self.themes.get(theme_name, base)
+        # ensure required keys exist
+        theme = {
+            "background": selected.get("background", base.get("background", "#ffffff")),
+            "foreground": selected.get("foreground", base.get("foreground", "#000000")),
+            "accent": selected.get("accent", base.get("accent", "#2563eb")),
+            "muted": selected.get("muted", base.get("muted", "#94a3b8")),
+        }
+        table = selected.get("table", {}) or {}
+        base_table = base.get("table", {}) or {}
+        theme["table"] = {
+            "header_bg": table.get("header_bg", base_table.get("header_bg", theme["background"])),
+            "header_fg": table.get("header_fg", base_table.get("header_fg", theme["foreground"])),
+            "row_bg": table.get("row_bg", base_table.get("row_bg", theme["background"])),
+            "alt_row_bg": table.get("alt_row_bg", base_table.get("alt_row_bg", theme["background"])),
+        }
+        return theme
 
     def set_default_theme(self, name: str) -> None:
         self.settings.setdefault("themes", {})
