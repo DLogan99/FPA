@@ -29,6 +29,10 @@ Requires Python 3.10+ (standard library only).
 ## Backup policy
 Default: keep 3 most recent backups + 3 spaced historical snapshots per file (configurable in `config/settings.json`).
 
+## Data locations
+- Source/tree runs: data and config live under the repo (`config/`, `data/`, `backups/`).
+- Packaged/PyInstaller builds: user-writable data and config are placed under your OS data directory (e.g., `%APPDATA%/finance_planner` on Windows or `~/.local/share/finance_planner` on Linux) so theme and UI changes persist across app restarts.
+
 ## Stored ideas
 See `stored_ideas.md` for future-scope items you requested to keep on file.
 

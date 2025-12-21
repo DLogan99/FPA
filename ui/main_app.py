@@ -125,7 +125,9 @@ class PurchasesView(ttk.Frame):
         ttk.Button(btn_frame, text="Add Item", command=self._add_item).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Edit Selected", command=self._edit_item).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="View Selected", command=self._view_item).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="Delete Selected", command=self._delete_item).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Refresh", command=self.refresh_table).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="Import CSV", command=self._import_csv).pack(side="left", padx=4)
 
         columns = ("product", "date", "cost", "urgency", "overall")
         self.tree = ttk.Treeview(self, columns=columns, show="headings")
@@ -178,6 +180,35 @@ class PurchasesView(ttk.Frame):
             return
         self.app.view_item(record)
 
+    def _delete_item(self) -> None:
+        record = self._get_selected_item()
+        if not record:
+            messagebox.showinfo("Delete Item", "Select a row to delete.")
+            return
+        if not messagebox.askyesno("Delete Item", f"Delete '{record.product}'?"):
+            return
+        self.app.items = [i for i in self.app.items if i.id != record.id]
+        self.app.save_items(trigger_backup=self.app.settings["ui"].get("autosave", True))
+
+    def _import_csv(self) -> None:
+        try:
+            path = filedialog.askopenfilename(
+                title="Select items CSV",
+                filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")],
+            )
+        except Exception as exc:
+            messagebox.showerror("Import", f"Failed to open file dialog: {exc}")
+            return
+        if not path:
+            return
+        try:
+            imported = read_items(path)
+        except Exception as exc:
+            messagebox.showerror("Import", f"Failed to read CSV: {exc}")
+            return
+        self.app.items = imported
+        self.app.save_items(trigger_backup=self.app.settings["ui"].get("autosave", True))
+
 
 class MoneyView(ttk.Frame):
     def __init__(self, parent, app: FinancePlannerApp):
@@ -203,7 +234,9 @@ class MoneyView(ttk.Frame):
     def refresh_table(self) -> None:
         for row in self.tree.get_children():
             self.tree.delete(row)
+        id_to_product = {item.id: item.product for item in self.app.items}
         for entry in self.app.money:
+            linked_display = id_to_product.get(entry.linked_item_id, entry.linked_item_id)
             self.tree.insert(
                 "",
                 "end",
@@ -213,7 +246,7 @@ class MoneyView(ttk.Frame):
                     entry.entry_type,
                     entry.source_or_destination,
                     f"{self.app.currency_symbol}{entry.amount:.2f}",
-                    entry.linked_item_id,
+                    linked_display,
                 ),
             )
 
@@ -251,7 +284,7 @@ class SettingsView(ttk.Frame):
         self.theme_menu = ttk.Combobox(self, textvariable=self.theme_var, state="readonly")
         self.refresh_theme_dropdown()
         self.theme_menu.grid(row=0, column=1, sticky="ew", **pad)
-        ttk.Button(self, text="Apply Theme", command=self._apply_theme).grid(row=0, column=2, **pad)
+        self.theme_menu.bind("<<ComboboxSelected>>", self._apply_theme)
 
         ttk.Label(self, text="Autosave").grid(row=1, column=0, sticky="w", **pad)
         self.autosave_var = tk.BooleanVar(value=self.app.settings["ui"].get("autosave", True))
@@ -265,7 +298,7 @@ class SettingsView(ttk.Frame):
         self.theme_menu["values"] = list(self.app.config_manager.themes.keys())
         self.theme_menu.set(self.app.config_manager.settings["themes"]["default"])
 
-    def _apply_theme(self) -> None:
+    def _apply_theme(self, event=None) -> None:
         name = self.theme_var.get()
         self.app.change_theme(name)
 
@@ -465,11 +498,17 @@ class MoneyDialog:
         self.notes_entry.grid(row=4, column=1, sticky="ew", **pad)
 
         ttk.Label(self.top, text="Linked Item ID (optional)").grid(row=5, column=0, sticky="w", **pad)
-        self.link_var = tk.StringVar()
+        self.link_var = tk.StringVar(value="")
+        self.link_map = {"": ""}
+        options = []
+        for item in self.items:
+            display = f"{item.product} ({item.id})"
+            self.link_map[display] = item.id
+            options.append(display)
         ttk.Combobox(
             self.top,
             textvariable=self.link_var,
-            values=[""] + [item.id for item in self.items],
+            values=[""] + options,
             state="readonly",
         ).grid(row=5, column=1, sticky="ew", **pad)
 
@@ -482,7 +521,8 @@ class MoneyDialog:
         self.source_entry.insert(0, entry.source_or_destination)
         self.amount_entry.insert(0, str(entry.amount))
         self.notes_entry.insert(0, entry.notes)
-        self.link_var.set(entry.linked_item_id)
+        display = next((k for k, v in self.link_map.items() if v == entry.linked_item_id), "")
+        self.link_var.set(display)
 
     def _save(self) -> None:
         try:
@@ -499,7 +539,7 @@ class MoneyDialog:
             source_or_destination=self.source_entry.get(),
             amount=amount,
             notes=self.notes_entry.get(),
-            linked_item_id=self.link_var.get(),
+            linked_item_id=self.link_map.get(self.link_var.get(), ""),
         )
         self.result = record
         self.top.destroy()

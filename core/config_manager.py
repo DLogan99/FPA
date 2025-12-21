@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import sys
 from typing import Any, Dict, Optional
 
@@ -13,21 +14,114 @@ class ConfigManager:
         weights_path: str = "config/weights.json",
         themes_path: str = "config/themes.json",
     ) -> None:
-        self.base_dir = getattr(sys, "_MEIPASS", os.getcwd())
-        self.settings_path = self._rel(settings_path)
-        self.weights_path = self._rel(weights_path)
-        self.themes_path = self._rel(themes_path)
-        self.settings = self._load_json(self.settings_path, default={})
-        self.weights = self._load_json(self.weights_path, default={})
-        self.themes = self._load_json(self.themes_path, default={})
+        self.bundle_dir = getattr(sys, "_MEIPASS", os.getcwd())
+        self.user_root = self._user_data_root()
+        self.settings_path = self._user_path(settings_path)
+        self.weights_path = self._user_path(weights_path)
+        self.themes_path = self._user_path(themes_path)
+        self.settings = self._load_json(
+            self.settings_path,
+            default=self._default_settings(),
+            packaged_name=settings_path,
+        )
+        self.weights = self._load_json(
+            self.weights_path,
+            default=self._default_weights(),
+            packaged_name=weights_path,
+        )
+        self.themes = self._load_json(
+            self.themes_path,
+            default=self._default_themes(),
+            packaged_name=themes_path,
+        )
         self._apply_defaults()
 
     @staticmethod
-    def _load_json(path: str, default: Dict[str, Any]) -> Dict[str, Any]:
+    def _user_data_root() -> str:
+        if os.name == "nt":
+            base = os.environ.get("APPDATA") or os.path.expanduser("~\\AppData\\Roaming")
+        else:
+            base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+        return os.path.join(base, "finance_planner")
+
+    def _user_path(self, relative: str) -> str:
+        if os.path.isabs(relative):
+            return relative
+        return os.path.join(self.user_root, relative)
+
+    def _load_json(self, path: str, default: Dict[str, Any], packaged_name: Optional[str] = None) -> Dict[str, Any]:
         if not os.path.exists(path):
-            return dict(default)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            if packaged_name:
+                packaged_path = os.path.join(self.bundle_dir, packaged_name)
+                if os.path.exists(packaged_path):
+                    shutil.copy2(packaged_path, path)
+            if not os.path.exists(path):
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(default, f, indent=2)
+                return dict(default)
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
+
+    @staticmethod
+    def _default_settings() -> Dict[str, Any]:
+        return {
+            "paths": {
+                "items_csv": "",
+                "money_csv": "",
+                "backup_dir": "",
+            },
+            "backup": {
+                "keep_recent": 3,
+                "keep_historical": 3,
+            },
+            "themes": {"default": "light"},
+            "ui": {
+                "date_format": "%Y-%m-%d %H:%M",
+                "currency_symbol": "$",
+                "autosave": True,
+            },
+        }
+
+    @staticmethod
+    def _default_weights() -> Dict[str, Any]:
+        return {
+            "weights": {
+                "date": 1.0,
+                "cost": 1.0,
+                "urgency": 1.0,
+                "value": 1.0,
+                "price_comp": 1.0,
+                "effect": 1.0,
+            },
+            "date_scoring": {"recent_days": 7, "mid_days": 30},
+            "cost_bands": [
+                {"max": 50, "score": 5},
+                {"max": 150, "score": 4},
+                {"max": 400, "score": 3},
+                {"max": 800, "score": 2},
+                {"max": None, "score": 1},
+            ],
+            "urgency_override": 5,
+        }
+
+    @staticmethod
+    def _default_themes() -> Dict[str, Any]:
+        # Minimal fallback; the bundled themes.json has richer content.
+        return {
+            "light": {
+                "background": "#f7f9fb",
+                "foreground": "#0f172a",
+                "accent": "#2563eb",
+                "muted": "#94a3b8",
+                "table": {
+                    "header_bg": "#e2e8f0",
+                    "header_fg": "#0f172a",
+                    "row_bg": "#ffffff",
+                    "alt_row_bg": "#f1f5f9",
+                },
+            }
+        }
 
     def _rel(self, path: str) -> str:
         if os.path.isabs(path):
@@ -35,14 +129,10 @@ class ConfigManager:
         return os.path.join(self.base_dir, path)
 
     def _apply_defaults(self) -> None:
-        self.settings.setdefault(
-            "paths",
-            {
-                "items_csv": os.path.join(self.base_dir, "data", "items.csv"),
-                "money_csv": os.path.join(self.base_dir, "data", "money.csv"),
-                "backup_dir": os.path.join(self.base_dir, "backups"),
-            },
-        )
+        paths = self.settings.setdefault("paths", {})
+        paths.setdefault("items_csv", os.path.join(self.user_root, "data", "items.csv"))
+        paths.setdefault("money_csv", os.path.join(self.user_root, "data", "money.csv"))
+        paths.setdefault("backup_dir", os.path.join(self.user_root, "backups"))
         self.settings.setdefault(
             "backup",
             {
@@ -136,10 +226,7 @@ class ConfigManager:
 def ensure_paths(settings: Dict[str, Any]) -> None:
     """Ensure directories for data and backups exist."""
     paths = settings.get("paths", {})
-    for key in ("items_csv", "money_csv"):
+    for key in ("items_csv", "money_csv", "backup_dir"):
         path = paths.get(key)
         if path:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-    backup_dir = paths.get("backup_dir")
-    if backup_dir:
-        os.makedirs(backup_dir, exist_ok=True)
+            os.makedirs(os.path.dirname(path) if key != "backup_dir" else path, exist_ok=True)
