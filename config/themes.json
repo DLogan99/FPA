@@ -1,0 +1,50 @@
+{
+  "light": {
+    "background": "#f7f9fb",
+    "foreground": "#0f172a",
+    "accent": "#2563eb",
+    "muted": "#94a3b8",
+    "table": {
+      "header_bg": "#e2e8f0",
+      "header_fg": "#0f172a",
+      "row_bg": "#ffffff",
+      "alt_row_bg": "#f1f5f9"
+    }
+  },
+  "dark": {
+    "background": "#0b1220",
+    "foreground": "#e2e8f0",
+    "accent": "#60a5fa",
+    "muted": "#94a3b8",
+    "table": {
+      "header_bg": "#1f2937",
+      "header_fg": "#e5e7eb",
+      "row_bg": "#111827",
+      "alt_row_bg": "#0b1220"
+    }
+  },
+  "toyota-retro": {
+    "background": "#f8f1e7",
+    "foreground": "#2d2a32",
+    "accent": "#c1121f",
+    "muted": "#7a6f6f",
+    "table": {
+      "header_bg": "#e0d3c2",
+      "header_fg": "#2d2a32",
+      "row_bg": "#fff8ef",
+      "alt_row_bg": "#f3e8d5"
+    }
+  },
+  "openai-inspired": {
+    "background": "#0d1117",
+    "foreground": "#c9d1d9",
+    "accent": "#3fb950",
+    "muted": "#8b949e",
+    "table": {
+      "header_bg": "#161b22",
+      "header_fg": "#c9d1d9",
+      "row_bg": "#0d1117",
+      "alt_row_bg": "#111827"
+    }
+  }
+}
