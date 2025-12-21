@@ -31,7 +31,3 @@ Default: keep 3 most recent backups + 3 spaced historical snapshots per file (co
 
 ## Stored ideas
 See `stored_ideas.md` for future-scope items you requested to keep on file.
-
-## Downloading prebuilt binaries (CI artifacts)
-- GitHub Actions workflow: `.github/workflows/build.yml` builds Windows (`finance-planner-windows.exe`) and Linux (`finance-planner-linux`) binaries via PyInstaller.
-- After a push/PR, open the workflow run in GitHub Actions and download the artifact for your OS.
