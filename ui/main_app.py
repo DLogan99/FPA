@@ -127,6 +127,7 @@ class PurchasesView(ttk.Frame):
         ttk.Button(btn_frame, text="View Selected", command=self._view_item).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Delete Selected", command=self._delete_item).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Refresh", command=self.refresh_table).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="Import CSV", command=self._import_csv).pack(side="left", padx=4)
 
         columns = ("product", "date", "cost", "urgency", "overall")
         self.tree = ttk.Treeview(self, columns=columns, show="headings")
@@ -187,6 +188,25 @@ class PurchasesView(ttk.Frame):
         if not messagebox.askyesno("Delete Item", f"Delete '{record.product}'?"):
             return
         self.app.items = [i for i in self.app.items if i.id != record.id]
+        self.app.save_items(trigger_backup=self.app.settings["ui"].get("autosave", True))
+
+    def _import_csv(self) -> None:
+        try:
+            path = filedialog.askopenfilename(
+                title="Select items CSV",
+                filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")],
+            )
+        except Exception as exc:
+            messagebox.showerror("Import", f"Failed to open file dialog: {exc}")
+            return
+        if not path:
+            return
+        try:
+            imported = read_items(path)
+        except Exception as exc:
+            messagebox.showerror("Import", f"Failed to read CSV: {exc}")
+            return
+        self.app.items = imported
         self.app.save_items(trigger_backup=self.app.settings["ui"].get("autosave", True))
 
 
