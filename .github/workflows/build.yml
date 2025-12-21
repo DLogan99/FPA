@@ -1,0 +1,82 @@
+name: build-binaries
+
+on:
+  push:
+    branches: ["main", "master", "work", "develop"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PyInstaller
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "pyinstaller==6.10.0"
+
+      - name: Build Windows executable (bash)
+        shell: bash
+        run: |
+          python -m PyInstaller app.py \
+            --name finance-planner-windows \
+            --onefile \
+            --noconfirm \
+            --add-data "config;config" \
+            --add-data "core;core" \
+            --add-data "scoring;scoring" \
+            --add-data "ui;ui" \
+            --add-data "stored_ideas.md;." \
+            --add-data "README.md;."
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: finance-planner-windows
+          path: dist/finance-planner-windows.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PyInstaller
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "pyinstaller==6.10.0"
+
+      - name: Build Linux binary
+        shell: bash
+        run: |
+          python -m PyInstaller app.py \
+            --name finance-planner-linux \
+            --onefile \
+            --noconfirm \
+            --add-data "config:config" \
+            --add-data "core:core" \
+            --add-data "scoring:scoring" \
+            --add-data "ui:ui" \
+            --add-data "stored_ideas.md:." \
+            --add-data "README.md:."
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: finance-planner-linux
+          path: dist/finance-planner-linux
