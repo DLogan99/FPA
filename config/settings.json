@@ -1,0 +1,19 @@
+{
+  "paths": {
+    "items_csv": "data/items.csv",
+    "money_csv": "data/money.csv",
+    "backup_dir": "backups"
+  },
+  "backup": {
+    "keep_recent": 3,
+    "keep_historical": 3
+  },
+  "themes": {
+    "default": "light"
+  },
+  "ui": {
+    "date_format": "%Y-%m-%d %H:%M",
+    "currency_symbol": "$",
+    "autosave": true
+  }
+}
