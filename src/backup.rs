@@ -58,7 +58,12 @@ fn enforce_retention(dir: &Path, stem: &str, policy: &BackupConfig) -> Result<()
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.is_file() && !keep_paths.contains(&path) {
+        let name_matches_stem = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|n| n.starts_with(stem))
+            .unwrap_or(false);
+        if name_matches_stem && path.is_file() && !keep_paths.contains(&path) {
             let _ = fs::remove_file(path);
         }
     }

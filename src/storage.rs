@@ -3,7 +3,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Local, TimeZone};
 use csv::{ReaderBuilder, WriterBuilder};
 use fs2::FileExt;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::path::Path;
 use uuid::Uuid;
 
@@ -27,8 +27,13 @@ pub fn write_items(path: &Path, items: &[ItemRecord]) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let file = File::create(path)?;
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(path)?;
     file.lock_exclusive()?;
+    file.set_len(0)?;
     let mut writer = WriterBuilder::new().has_headers(true).from_writer(&file);
     for item in items {
         writer.serialize(CsvItem::from(item))?;
@@ -58,8 +63,13 @@ pub fn write_money(path: &Path, entries: &[MoneyRecord]) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let file = File::create(path)?;
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(path)?;
     file.lock_exclusive()?;
+    file.set_len(0)?;
     let mut writer = WriterBuilder::new().has_headers(true).from_writer(&file);
     for entry in entries {
         writer.serialize(CsvMoney::from(entry))?;
