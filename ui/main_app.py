@@ -1,6 +1,6 @@
 import tkinter as tk
 from datetime import datetime
-from tkinter import messagebox, simpledialog, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Dict, List, Optional
 from uuid import uuid4
 
@@ -58,6 +58,8 @@ class FinancePlannerApp(tk.Tk):
         self.style.configure("TButton", background=accent, foreground=fg, padding=6)
         self.style.configure("Treeview", background=row_bg, foreground=fg, fieldbackground=row_bg)
         self.style.map("TButton", background=[("active", accent)])
+        self.style.configure("HighScore.Treeview", foreground="#16a34a")
+        self.style.configure("LowScore.Treeview", foreground="#dc2626")
 
     def _load_data(self) -> None:
         self.items = read_items(self.items_path)
@@ -131,8 +133,9 @@ class PurchasesView(ttk.Frame):
 
         columns = ("product", "date", "cost", "urgency", "overall")
         self.tree = ttk.Treeview(self, columns=columns, show="headings")
-        for col, text in zip(columns, ["Product", "Date", "Cost", "Urgency", "Overall"]):
-            self.tree.heading(col, text=text)
+        headings = ["Product", "Date", "Cost", "Urgency", "Overall"]
+        for col, text in zip(columns, headings):
+            self.tree.heading(col, text=text, command=lambda c=col: self._sort_by(c, False))
             self.tree.column(col, width=120, anchor="center")
         self.tree.pack(fill="both", expand=True, padx=8, pady=6)
 
@@ -140,10 +143,16 @@ class PurchasesView(ttk.Frame):
         for row in self.tree.get_children():
             self.tree.delete(row)
         for item in self.app.items:
+            tag = ""
+            if (item.overall_score or 0) > 4:
+                tag = "high"
+            elif (item.overall_score or 0) < 2.5:
+                tag = "low"
             self.tree.insert(
                 "",
                 "end",
                 iid=item.id,
+                tags=(tag,) if tag else (),
                 values=(
                     item.product,
                     item.date.strftime(self.app.date_fmt),
@@ -152,6 +161,8 @@ class PurchasesView(ttk.Frame):
                     f"{(item.overall_score or 0):.2f}",
                 ),
             )
+        self.tree.tag_configure("high", foreground="#16a34a")
+        self.tree.tag_configure("low", foreground="#dc2626")
 
     def _get_selected_item(self) -> Optional[ItemRecord]:
         selected = self.tree.selection()
@@ -163,8 +174,33 @@ class PurchasesView(ttk.Frame):
                 return item
         return None
 
+    def _sort_by(self, col: str, descending: bool) -> None:
+        data = []
+        for item_id in self.tree.get_children(""):
+            values = self.tree.item(item_id)["values"]
+            col_index = {"product": 0, "date": 1, "cost": 2, "urgency": 3, "overall": 4}[col]
+            data.append((values[col_index], item_id))
+
+        def cast(val):
+            if col in ("cost", "urgency", "overall"):
+                try:
+                    return float(val.strip("$")) if isinstance(val, str) else float(val)
+                except Exception:
+                    return 0
+            if col == "date":
+                try:
+                    return datetime.strptime(val, self.app.date_fmt)
+                except Exception:
+                    return datetime.min
+            return str(val).lower()
+
+        data.sort(key=lambda t: cast(t[0]), reverse=descending)
+        for idx, (_, iid) in enumerate(data):
+            self.tree.move(iid, "", idx)
+        self.tree.heading(col, command=lambda c=col: self._sort_by(c, not descending))
+
     def _add_item(self) -> None:
-        self.app.add_or_edit_item()
+            self.app.add_or_edit_item()
 
     def _edit_item(self) -> None:
         record = self._get_selected_item()
@@ -197,14 +233,14 @@ class PurchasesView(ttk.Frame):
                 filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")],
             )
         except Exception as exc:
-            messagebox.showerror("Import", f"Failed to open file dialog: {exc}")
+            show_error_dialog(self, "Import", "Failed to open file dialog.", str(exc))
             return
         if not path:
             return
         try:
             imported = read_items(path)
         except Exception as exc:
-            messagebox.showerror("Import", f"Failed to read CSV: {exc}")
+            show_error_dialog(self, "Import", "Failed to read CSV.", str(exc))
             return
         self.app.items = imported
         self.app.save_items(trigger_backup=self.app.settings["ui"].get("autosave", True))
@@ -312,7 +348,7 @@ class SettingsView(ttk.Frame):
             create_backup(self.app.money_path, self.app.backup_dir, self.app.settings["backup"])
             messagebox.showinfo("Backup", "Backups created.")
         except FileNotFoundError as exc:
-            messagebox.showerror("Backup", str(exc))
+            show_error_dialog(self, "Backup", "Backup failed.", str(exc))
 
 
 class ItemDialog:
@@ -553,3 +589,22 @@ def launch() -> None:
 
 if __name__ == "__main__":
     launch()
+def show_error_dialog(parent: tk.Tk, title: str, message: str, detail: str = "") -> None:
+    top = tk.Toplevel(parent)
+    top.title(title)
+    top.grab_set()
+    pad = {"padx": 10, "pady": 6}
+    ttk.Label(top, text=message, wraplength=360).grid(row=0, column=0, columnspan=2, sticky="w", **pad)
+    if detail:
+        text = tk.Text(top, height=6, width=50, wrap="word")
+        text.insert("1.0", detail)
+        text.config(state="disabled")
+        text.grid(row=1, column=0, columnspan=2, sticky="nsew", **pad)
+    def _copy():
+        top.clipboard_clear()
+        top.clipboard_append(detail or message)
+    ttk.Button(top, text="Copy error", command=_copy).grid(row=2, column=0, sticky="w", **pad)
+    ttk.Button(top, text="Close", command=top.destroy).grid(row=2, column=1, sticky="e", **pad)
+    top.columnconfigure(0, weight=1)
+    top.columnconfigure(1, weight=1)
+    top.rowconfigure(1, weight=1)

@@ -30,6 +30,7 @@ jobs:
           python -m PyInstaller app.py \
             --name finance-planner-windows \
             --onefile \
+            --noconsole \
             --noconfirm \
             --add-data "config;config" \
             --add-data "core;core" \
@@ -67,6 +68,7 @@ jobs:
           python -m PyInstaller app.py \
             --name finance-planner-linux \
             --onefile \
+            --noconsole \
             --noconfirm \
             --add-data "config:config" \
             --add-data "core:core" \
