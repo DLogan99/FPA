@@ -1,3 +1,4 @@
+import csv
 import tkinter as tk
 from datetime import datetime
 from tkinter import filedialog, messagebox, simpledialog, ttk
@@ -9,6 +10,29 @@ from core.config_manager import ConfigManager, ensure_paths
 from core.csv_storage import read_items, read_money, write_items, write_money
 from core.models import ItemRecord, MoneyRecord
 from scoring.scoring import ScoreResult, score_item
+
+
+def show_error_dialog(parent: tk.Tk, title: str, message: str, detail: str = "") -> None:
+    top = tk.Toplevel(parent)
+    top.title(title)
+    top.grab_set()
+    pad = {"padx": 10, "pady": 6}
+    ttk.Label(top, text=message, wraplength=360).grid(row=0, column=0, columnspan=2, sticky="w", **pad)
+    if detail:
+        text = tk.Text(top, height=6, width=50, wrap="word")
+        text.insert("1.0", detail)
+        text.config(state="disabled")
+        text.grid(row=1, column=0, columnspan=2, sticky="nsew", **pad)
+
+    def _copy():
+        top.clipboard_clear()
+        top.clipboard_append(detail or message)
+
+    ttk.Button(top, text="Copy error", command=_copy).grid(row=2, column=0, sticky="w", **pad)
+    ttk.Button(top, text="Close", command=top.destroy).grid(row=2, column=1, sticky="e", **pad)
+    top.columnconfigure(0, weight=1)
+    top.columnconfigure(1, weight=1)
+    top.rowconfigure(1, weight=1)
 
 
 class FinancePlannerApp(tk.Tk):
@@ -44,6 +68,7 @@ class FinancePlannerApp(tk.Tk):
         self.notebook.add(self.settings_view, text="Settings")
 
         self._load_data()
+        self.bind_all("<Control-f>", self._focus_search)
 
     def _apply_theme(self) -> None:
         bg = self.theme.get("background", "#ffffff")
@@ -114,11 +139,22 @@ class FinancePlannerApp(tk.Tk):
         self.money_view.refresh_table()
         self.settings_view.refresh_theme_dropdown()
 
+    def _focus_search(self, event=None) -> None:
+        current = self.notebook.select()
+        if current == str(self.purchases_view):
+            self.purchases_view.search_entry.focus_set()
+        elif current == str(self.money_view):
+            self.money_view.search_entry.focus_set()
+
 
 class PurchasesView(ttk.Frame):
     def __init__(self, parent, app: FinancePlannerApp):
         super().__init__(parent)
         self.app = app
+        self.search_var = tk.StringVar(value="")
+        self.total_cost_var = tk.StringVar(value=f"{self.app.currency_symbol}0.00")
+        self.avg_score_var = tk.StringVar(value="0.00")
+        self.count_var = tk.StringVar(value="0 items")
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -130,6 +166,15 @@ class PurchasesView(ttk.Frame):
         ttk.Button(btn_frame, text="Delete Selected", command=self._delete_item).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Refresh", command=self.refresh_table).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Import CSV", command=self._import_csv).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="Export CSV", command=self._export_csv).pack(side="left", padx=4)
+
+        search_frame = ttk.Frame(self)
+        search_frame.pack(fill="x", padx=8, pady=(0, 6))
+        ttk.Label(search_frame, text="Search").pack(side="left")
+        self.search_entry = ttk.Entry(search_frame, textvariable=self.search_var)
+        self.search_entry.pack(side="left", fill="x", expand=True, padx=(6, 0))
+        self.search_entry.bind("<KeyRelease>", self._on_search)
+        ttk.Button(search_frame, text="Clear", command=self._clear_search).pack(side="left", padx=(6, 0))
 
         columns = ("product", "date", "cost", "urgency", "overall")
         self.tree = ttk.Treeview(self, columns=columns, show="headings")
@@ -138,11 +183,27 @@ class PurchasesView(ttk.Frame):
             self.tree.heading(col, text=text, command=lambda c=col: self._sort_by(c, False))
             self.tree.column(col, width=120, anchor="center")
         self.tree.pack(fill="both", expand=True, padx=8, pady=6)
+        self.tree.bind("<Double-1>", self._on_row_double_click)
+        self.tree.bind("<Delete>", self._on_delete_key)
+
+        summary = ttk.Frame(self)
+        summary.pack(fill="x", padx=8, pady=(0, 6))
+        ttk.Label(summary, text="Total Cost:").grid(row=0, column=0, sticky="w")
+        ttk.Label(summary, textvariable=self.total_cost_var).grid(row=0, column=1, sticky="w", padx=(4, 12))
+        ttk.Label(summary, text="Average Score:").grid(row=0, column=2, sticky="w")
+        ttk.Label(summary, textvariable=self.avg_score_var).grid(row=0, column=3, sticky="w", padx=(4, 0))
+        ttk.Label(summary, textvariable=self.count_var, anchor="e").grid(row=0, column=4, sticky="e")
+        summary.columnconfigure(4, weight=1)
 
     def refresh_table(self) -> None:
         for row in self.tree.get_children():
             self.tree.delete(row)
-        for item in self.app.items:
+        filtered = self._filtered_items()
+        total_cost = 0.0
+        scored_items = 0
+        score_sum = 0.0
+        count = 0
+        for item in filtered:
             tag = ""
             if (item.overall_score or 0) > 4:
                 tag = "high"
@@ -161,8 +222,17 @@ class PurchasesView(ttk.Frame):
                     f"{(item.overall_score or 0):.2f}",
                 ),
             )
+            total_cost += item.cost
+            if item.overall_score is not None:
+                scored_items += 1
+                score_sum += item.overall_score
+            count += 1
         self.tree.tag_configure("high", foreground="#16a34a")
         self.tree.tag_configure("low", foreground="#dc2626")
+        avg = score_sum / scored_items if scored_items else 0.0
+        self.total_cost_var.set(f"{self.app.currency_symbol}{total_cost:.2f}")
+        self.avg_score_var.set(f"{avg:.2f}")
+        self.count_var.set(f"{count} item{'s' if count != 1 else ''}")
 
     def _get_selected_item(self) -> Optional[ItemRecord]:
         selected = self.tree.selection()
@@ -200,7 +270,7 @@ class PurchasesView(ttk.Frame):
         self.tree.heading(col, command=lambda c=col: self._sort_by(c, not descending))
 
     def _add_item(self) -> None:
-            self.app.add_or_edit_item()
+        self.app.add_or_edit_item()
 
     def _edit_item(self) -> None:
         record = self._get_selected_item()
@@ -242,14 +312,89 @@ class PurchasesView(ttk.Frame):
         except Exception as exc:
             show_error_dialog(self, "Import", "Failed to read CSV.", str(exc))
             return
-        self.app.items = imported
+        choice = messagebox.askyesnocancel(
+            "Import Items",
+            "Replace existing items with imported data?\n\nYes = replace, No = append, Cancel = abort.",
+        )
+        if choice is None:
+            return
+        if choice:
+            self.app.items = imported
+        else:
+            merged = {item.id: item for item in self.app.items}
+            for item in imported:
+                merged[item.id] = item
+            self.app.items = list(merged.values())
         self.app.save_items(trigger_backup=self.app.settings["ui"].get("autosave", True))
+        messagebox.showinfo("Import", "Items imported.")
+
+    def _filtered_items(self) -> List[ItemRecord]:
+        query = self.search_var.get().strip().lower()
+        if not query:
+            return list(self.app.items)
+        result = []
+        for item in self.app.items:
+            haystack = " ".join(
+                [
+                    item.product,
+                    item.description,
+                    item.location,
+                    item.reference,
+                    item.justification,
+                ]
+            ).lower()
+            if query in haystack:
+                result.append(item)
+        return result
+
+    def _on_search(self, event=None) -> None:
+        self.refresh_table()
+
+    def _clear_search(self) -> None:
+        if self.search_var.get():
+            self.search_var.set("")
+            self.refresh_table()
+
+    def _on_row_double_click(self, event) -> None:
+        record = self._get_selected_item()
+        if record:
+            self.app.add_or_edit_item(record)
+
+    def _on_delete_key(self, event) -> None:
+        self._delete_item()
+
+    def _export_csv(self) -> None:
+        try:
+            path = filedialog.asksaveasfilename(
+                title="Save purchases CSV",
+                defaultextension=".csv",
+                filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")],
+            )
+        except Exception as exc:
+            show_error_dialog(self, "Export", "Failed to open save dialog.", str(exc))
+            return
+        if not path:
+            return
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as fh:
+                writer = csv.DictWriter(fh, fieldnames=ItemRecord.headers())
+                writer.writeheader()
+                for item in self._filtered_items():
+                    writer.writerow(item.to_row(self.app.date_fmt))
+            messagebox.showinfo("Export", "Purchases exported.")
+        except Exception as exc:
+            show_error_dialog(self, "Export", "Failed to export purchases.", str(exc))
 
 
 class MoneyView(ttk.Frame):
     def __init__(self, parent, app: FinancePlannerApp):
         super().__init__(parent)
         self.app = app
+        self.search_var = tk.StringVar(value="")
+        self.income_var = tk.StringVar(value=f"{self.app.currency_symbol}0.00")
+        self.expense_var = tk.StringVar(value=f"{self.app.currency_symbol}0.00")
+        self.balance_var = tk.StringVar(value=f"{self.app.currency_symbol}0.00")
+        self.count_var = tk.StringVar(value="0 entries")
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -257,7 +402,18 @@ class MoneyView(ttk.Frame):
         btn_frame.pack(fill="x", padx=8, pady=6)
         ttk.Button(btn_frame, text="Add Entry", command=self._add_entry).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Edit Selected", command=self._edit_entry).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="Delete Selected", command=self._delete_entry).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Refresh", command=self.refresh_table).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="Import CSV", command=self._import_csv).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="Export CSV", command=self._export_csv).pack(side="left", padx=4)
+
+        search_frame = ttk.Frame(self)
+        search_frame.pack(fill="x", padx=8, pady=(0, 6))
+        ttk.Label(search_frame, text="Search").pack(side="left")
+        self.search_entry = ttk.Entry(search_frame, textvariable=self.search_var)
+        self.search_entry.pack(side="left", fill="x", expand=True, padx=(6, 0))
+        self.search_entry.bind("<KeyRelease>", self._on_search)
+        ttk.Button(search_frame, text="Clear", command=self._clear_search).pack(side="left", padx=(6, 0))
 
         columns = ("date", "type", "source", "amount", "linked_item")
         self.tree = ttk.Treeview(self, columns=columns, show="headings")
@@ -266,25 +422,51 @@ class MoneyView(ttk.Frame):
             self.tree.heading(col, text=text)
             self.tree.column(col, width=140, anchor="center")
         self.tree.pack(fill="both", expand=True, padx=8, pady=6)
+        self.tree.bind("<Double-1>", self._on_row_double_click)
+        self.tree.bind("<Delete>", self._on_delete_key)
+
+        summary = ttk.Frame(self)
+        summary.pack(fill="x", padx=8, pady=(0, 6))
+        ttk.Label(summary, text="Income:").grid(row=0, column=0, sticky="w")
+        ttk.Label(summary, textvariable=self.income_var).grid(row=0, column=1, sticky="w", padx=(4, 12))
+        ttk.Label(summary, text="Expenses:").grid(row=0, column=2, sticky="w")
+        ttk.Label(summary, textvariable=self.expense_var).grid(row=0, column=3, sticky="w", padx=(4, 12))
+        ttk.Label(summary, text="Balance:").grid(row=0, column=4, sticky="w")
+        ttk.Label(summary, textvariable=self.balance_var, font=("TkDefaultFont", 10, "bold")).grid(
+            row=0, column=5, sticky="w", padx=(4, 0)
+        )
+        ttk.Label(summary, textvariable=self.count_var, anchor="e").grid(row=0, column=6, sticky="e")
+        summary.columnconfigure(6, weight=1)
 
     def refresh_table(self) -> None:
         for row in self.tree.get_children():
             self.tree.delete(row)
         id_to_product = {item.id: item.product for item in self.app.items}
-        for entry in self.app.money:
+        income = 0.0
+        expense = 0.0
+        count = 0
+        for entry in self._filtered_entries():
             linked_display = id_to_product.get(entry.linked_item_id, entry.linked_item_id)
+            entry_type = entry.entry_type.lower()
+            if entry_type == "income":
+                income += entry.amount
+            elif entry_type == "expense":
+                expense += entry.amount
             self.tree.insert(
                 "",
                 "end",
                 iid=entry.id,
                 values=(
                     entry.date.strftime(self.app.date_fmt),
-                    entry.entry_type,
+                    entry.entry_type.title(),
                     entry.source_or_destination,
                     f"{self.app.currency_symbol}{entry.amount:.2f}",
                     linked_display,
                 ),
             )
+            count += 1
+        self._update_summary(income, expense)
+        self.count_var.set(f"{count} {'entry' if count == 1 else 'entries'}")
 
     def _get_selected_entry(self) -> Optional[MoneyRecord]:
         selected = self.tree.selection()
@@ -305,6 +487,113 @@ class MoneyView(ttk.Frame):
             messagebox.showinfo("Edit Entry", "Select a row to edit.")
             return
         self.app.add_money_entry(record)
+
+    def _delete_entry(self) -> None:
+        record = self._get_selected_entry()
+        if not record:
+            messagebox.showinfo("Delete Entry", "Select a row to delete.")
+            return
+        if not messagebox.askyesno("Delete Entry", "Delete this entry?"):
+            return
+        self.app.money = [m for m in self.app.money if m.id != record.id]
+        self.app.save_money(trigger_backup=self.app.settings["ui"].get("autosave", True))
+
+    def _update_summary(self, income: float, expense: float) -> None:
+        balance = income - expense
+        self.income_var.set(f"{self.app.currency_symbol}{income:.2f}")
+        self.expense_var.set(f"{self.app.currency_symbol}{expense:.2f}")
+        self.balance_var.set(f"{self.app.currency_symbol}{balance:.2f}")
+
+    def _filtered_entries(self) -> List[MoneyRecord]:
+        query = self.search_var.get().strip().lower()
+        if not query:
+            return list(self.app.money)
+        id_to_product = {item.id: item.product for item in self.app.items}
+        matches = []
+        for entry in self.app.money:
+            linked_product = id_to_product.get(entry.linked_item_id, "")
+            fields = " ".join(
+                [
+                    entry.entry_type,
+                    entry.source_or_destination,
+                    entry.notes,
+                    entry.linked_item_id,
+                    linked_product,
+                ]
+            ).lower()
+            if query in fields:
+                matches.append(entry)
+        return matches
+
+    def _on_search(self, event=None) -> None:
+        self.refresh_table()
+
+    def _clear_search(self) -> None:
+        if self.search_var.get():
+            self.search_var.set("")
+            self.refresh_table()
+
+    def _on_row_double_click(self, event) -> None:
+        record = self._get_selected_entry()
+        if record:
+            self.app.add_money_entry(record)
+
+    def _on_delete_key(self, event) -> None:
+        self._delete_entry()
+
+    def _import_csv(self) -> None:
+        try:
+            path = filedialog.askopenfilename(
+                title="Select money CSV",
+                filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")],
+            )
+        except Exception as exc:
+            show_error_dialog(self, "Import", "Failed to open file dialog.", str(exc))
+            return
+        if not path:
+            return
+        try:
+            imported = read_money(path)
+        except Exception as exc:
+            show_error_dialog(self, "Import", "Failed to read CSV.", str(exc))
+            return
+        choice = messagebox.askyesnocancel(
+            "Import Money",
+            "Replace existing entries with imported data?\n\nYes = replace, No = append, Cancel = abort.",
+        )
+        if choice is None:
+            return
+        if choice:
+            self.app.money = imported
+        else:
+            merged = {entry.id: entry for entry in self.app.money}
+            for entry in imported:
+                merged[entry.id] = entry
+            self.app.money = list(merged.values())
+        self.app.save_money(trigger_backup=self.app.settings["ui"].get("autosave", True))
+        messagebox.showinfo("Import", "Money entries imported.")
+
+    def _export_csv(self) -> None:
+        try:
+            path = filedialog.asksaveasfilename(
+                title="Save money CSV",
+                defaultextension=".csv",
+                filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")],
+            )
+        except Exception as exc:
+            show_error_dialog(self, "Export", "Failed to open save dialog.", str(exc))
+            return
+        if not path:
+            return
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as fh:
+                writer = csv.DictWriter(fh, fieldnames=MoneyRecord.headers())
+                writer.writeheader()
+                for entry in self._filtered_entries():
+                    writer.writerow(entry.to_row(self.app.date_fmt))
+            messagebox.showinfo("Export", "Money entries exported.")
+        except Exception as exc:
+            show_error_dialog(self, "Export", "Failed to export money entries.", str(exc))
 
 
 class SettingsView(ttk.Frame):
@@ -517,9 +806,11 @@ class MoneyDialog:
         ttk.Label(self.top, text="Date").grid(row=0, column=0, sticky="w", **pad)
         ttk.Entry(self.top, textvariable=self.date_var).grid(row=0, column=1, sticky="ew", **pad)
 
-        ttk.Label(self.top, text="Type (income/expense)").grid(row=1, column=0, sticky="w", **pad)
+        ttk.Label(self.top, text="Type").grid(row=1, column=0, sticky="w", **pad)
         self.type_var = tk.StringVar(value="income")
-        ttk.Entry(self.top, textvariable=self.type_var).grid(row=1, column=1, sticky="ew", **pad)
+        ttk.Combobox(self.top, textvariable=self.type_var, values=["income", "expense"], state="readonly").grid(
+            row=1, column=1, sticky="ew", **pad
+        )
 
         ttk.Label(self.top, text="Source/Destination").grid(row=2, column=0, sticky="w", **pad)
         self.source_entry = ttk.Entry(self.top)
@@ -589,22 +880,3 @@ def launch() -> None:
 
 if __name__ == "__main__":
     launch()
-def show_error_dialog(parent: tk.Tk, title: str, message: str, detail: str = "") -> None:
-    top = tk.Toplevel(parent)
-    top.title(title)
-    top.grab_set()
-    pad = {"padx": 10, "pady": 6}
-    ttk.Label(top, text=message, wraplength=360).grid(row=0, column=0, columnspan=2, sticky="w", **pad)
-    if detail:
-        text = tk.Text(top, height=6, width=50, wrap="word")
-        text.insert("1.0", detail)
-        text.config(state="disabled")
-        text.grid(row=1, column=0, columnspan=2, sticky="nsew", **pad)
-    def _copy():
-        top.clipboard_clear()
-        top.clipboard_append(detail or message)
-    ttk.Button(top, text="Copy error", command=_copy).grid(row=2, column=0, sticky="w", **pad)
-    ttk.Button(top, text="Close", command=top.destroy).grid(row=2, column=1, sticky="e", **pad)
-    top.columnconfigure(0, weight=1)
-    top.columnconfigure(1, weight=1)
-    top.rowconfigure(1, weight=1)
