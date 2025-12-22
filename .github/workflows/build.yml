@@ -2,83 +2,39 @@ name: build-binaries
 
 on:
   push:
-    branches: ["main", "master", "work", "develop"]
+    branches: ["main", "master", "work", "develop", "rust-rewrite"]
   pull_request:
   workflow_dispatch:
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install PyInstaller
-        shell: bash
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install "pyinstaller==6.10.0"
-
-      - name: Build Windows executable (bash)
-        shell: bash
-        run: |
-          python -m PyInstaller app.py \
-            --name finance-planner-windows \
-            --onefile \
-            --noconsole \
-            --noconfirm \
-            --add-data "config;config" \
-            --add-data "core;core" \
-            --add-data "scoring;scoring" \
-            --add-data "ui;ui" \
-            --add-data "stored_ideas.md;." \
-            --add-data "README.md;."
-
-      - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: finance-planner-windows
-          path: dist/finance-planner-windows.exe
-
   build-linux:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
         with:
-          python-version: '3.11'
-
-      - name: Install PyInstaller
-        shell: bash
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install "pyinstaller==6.10.0"
-
-      - name: Build Linux binary
-        shell: bash
-        run: |
-          python -m PyInstaller app.py \
-            --name finance-planner-linux \
-            --onefile \
-            --noconsole \
-            --noconfirm \
-            --add-data "config:config" \
-            --add-data "core:core" \
-            --add-data "scoring:scoring" \
-            --add-data "ui:ui" \
-            --add-data "stored_ideas.md:." \
-            --add-data "README.md:."
-
+          toolchain: stable
+          override: true
+      - name: Build (Linux)
+        run: cargo build --release
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         with:
           name: finance-planner-linux
-          path: dist/finance-planner-linux
+          path: target/release/finance_planner
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Build (Windows)
+        run: cargo build --release
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: finance-planner-windows
+          path: target/release/finance_planner.exe

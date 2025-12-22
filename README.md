@@ -1,41 +1,39 @@
-# Finance Planner App
+# Finance Planner (Rust rewrite)
 
-Local-first finance planning desktop app (Tkinter) for purchases and money tracking. Data stays in CSV files; scoring weights and themes are configurable.
+Local-first finance planner rewritten in Rust. Stores data in CSV and configurable JSON files under your OS data directory (e.g., `%APPDATA%/finance_planner` on Windows or `~/.local/share/finance_planner` on Linux).
 
-## Running
+## Features
+- Purchases/Items: add, list, delete, import from CSV. Scores computed via configurable weights.
+- Money: add and list entries, optionally link to items by ID.
+- Settings: show paths and current theme name.
+- Backups: timestamped copies with retention (3 recent + 3 historical by default).
+- Config and themes are user-writable JSON in the data directory; defaults are auto-created on first run.
 
+## Install / Run
 ```bash
-python app.py
+cargo run -- items add --product "Widget" --cost 25 --urgency 3 --value 4 --price-comp 3 --effect 3 --justification "Need"
+
+cargo run -- items list
+
+cargo run -- money add --entry-type expense --source-or-destination "Store" --amount 25
+
+cargo run -- settings show
 ```
 
-Requires Python 3.10+ (standard library only).
-
-## Data & Config
-- Purchases/items: `data/items.csv`
-- Money entries: `data/money.csv`
-- Settings: `config/settings.json`
-- Weights & scoring: `config/weights.json`
-- Themes: `config/themes.json`
-- Backups: `backups/`
-
-## Views
-- **Purchases**: Excel-style table of planned/recurring purchases with scores; add/edit/view items.
-- **Money**: Income/expense table; add/edit entries; optional link to items by ID.
-- **Settings**: Theme picker (light, dark, Toyota-retro, OpenAI-inspired), autosave toggle, manual backup.
-
-## Scoring
-- Separated in `scoring/scoring.py`. Date scoring uses inclusive thresholds (recent/mid); urgency 5 forces date to highest. Cost bands and weights are fully editable in `config/weights.json`.
-
-## Backup policy
-Default: keep 3 most recent backups + 3 spaced historical snapshots per file (configurable in `config/settings.json`).
-
 ## Data locations
-- Source/tree runs: data and config live under the repo (`config/`, `data/`, `backups/`).
-- Packaged/PyInstaller builds: user-writable data and config are placed under your OS data directory (e.g., `%APPDATA%/finance_planner` on Windows or `~/.local/share/finance_planner` on Linux) so theme and UI changes persist across app restarts.
+- Config: `<data_dir>/settings.json`
+- Weights: `<data_dir>/weights.json`
+- Themes: `<data_dir>/themes.json`
+- Items: `<data_dir>/data/items.csv`
+- Money: `<data_dir>/data/money.csv`
+- Backups: `<data_dir>/backups/`
 
-## Stored ideas
-See `stored_ideas.md` for future-scope items you requested to keep on file.
+## Building
+```bash
+cargo build --release
+```
 
-## Downloading prebuilt binaries (CI artifacts)
-- GitHub Actions workflow: `.github/workflows/build.yml` builds Windows (`finance-planner-windows.exe`) and Linux (`finance-planner-linux`) binaries via PyInstaller.
-- After a push/PR, open the workflow run in GitHub Actions and download the artifact for your OS.
+Artifacts will be in `target/release/finance_planner` (Linux) or `target\release\finance_planner.exe` (Windows).
+
+## CI artifacts
+GitHub Actions workflow `.github/workflows/build.yml` builds release binaries for Linux and Windows and uploads them as artifacts on each push/PR (including this `rust-rewrite` branch). Download them from the workflow run's Artifacts section.
