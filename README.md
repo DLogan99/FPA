@@ -5,6 +5,7 @@ Local-first finance planner built with Tkinter. Data is stored in CSV files with
 ## Features
 - Purchases/Items: add, edit, view, delete, import/export CSV, search/filter, and score via configurable weights with total spend, average score, and item counts.
 - Money: track income/expense entries, search/filter, import/export CSV, link to purchases by ID, and see income/expense totals with a running balance and entry counts.
+- Keyboard and mouse shortcuts: double-click rows to edit, Delete to remove selected rows, and Ctrl+F to jump to the active tab's search box.
 - Settings: update currency formatting, date display, theme, and backup retention.
 - Backups: timestamped copies with retention (3 recent + 3 historical by default).
 - Config and themes are user-writable JSON in the data directory; defaults are auto-created on first run.
