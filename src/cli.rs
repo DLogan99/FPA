@@ -172,10 +172,20 @@ fn handle_items(cmd: ItemsCmd, cfg: &AppConfig) -> Result<()> {
             if items.len() == start {
                 return Err(anyhow!("Item not found"));
             }
+            create_backup(
+                &cfg.settings.paths.items_csv,
+                &cfg.settings.paths.backup_dir,
+                &cfg.settings.backup,
+            )?;
             write_items(&cfg.settings.paths.items_csv, &items)?;
             println!("Item deleted.");
         }
         ItemSub::Import { path } => {
+            create_backup(
+                &cfg.settings.paths.items_csv,
+                &cfg.settings.paths.backup_dir,
+                &cfg.settings.backup,
+            )?;
             let imported =
                 read_items(&path).with_context(|| format!("Failed to read {}", path.display()))?;
             write_items(&cfg.settings.paths.items_csv, &imported)?;
