@@ -5,6 +5,8 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Dict, List, Optional
 from uuid import uuid4
 
+from operator import attrgetter
+
 from core.backup import create_backup
 from core.config_manager import ConfigManager, ensure_paths
 from core.csv_storage import read_items, read_money, write_items, write_money
@@ -69,6 +71,8 @@ class FinancePlannerApp(tk.Tk):
 
         self._load_data()
         self.bind_all("<Control-f>", self._focus_search)
+        self._sort_items()
+        self._sort_money()
 
     def _apply_theme(self) -> None:
         bg = self.theme.get("background", "#ffffff")
@@ -145,6 +149,12 @@ class FinancePlannerApp(tk.Tk):
             self.purchases_view.search_entry.focus_set()
         elif current == str(self.money_view):
             self.money_view.search_entry.focus_set()
+
+    def _sort_items(self) -> None:
+        self.items.sort(key=attrgetter("date"), reverse=True)
+
+    def _sort_money(self) -> None:
+        self.money.sort(key=attrgetter("date"), reverse=True)
 
 
 class PurchasesView(ttk.Frame):
@@ -325,6 +335,7 @@ class PurchasesView(ttk.Frame):
             for item in imported:
                 merged[item.id] = item
             self.app.items = list(merged.values())
+        self.app._sort_items()
         self.app.save_items(trigger_backup=self.app.settings["ui"].get("autosave", True))
         messagebox.showinfo("Import", "Items imported.")
 
@@ -570,6 +581,7 @@ class MoneyView(ttk.Frame):
             for entry in imported:
                 merged[entry.id] = entry
             self.app.money = list(merged.values())
+        self.app._sort_money()
         self.app.save_money(trigger_backup=self.app.settings["ui"].get("autosave", True))
         messagebox.showinfo("Import", "Money entries imported.")
 
