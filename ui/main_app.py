@@ -71,6 +71,8 @@ class FinancePlannerApp(tk.Tk):
 
         self._load_data()
         self.bind_all("<Control-f>", self._focus_search)
+        self.bind_all("<Control-e>", self._edit_current)
+        self.bind_all("<Control-n>", self._add_current)
         self._sort_items()
         self._sort_money()
 
@@ -150,6 +152,20 @@ class FinancePlannerApp(tk.Tk):
         elif current == str(self.money_view):
             self.money_view.search_entry.focus_set()
 
+    def _edit_current(self, event=None) -> None:
+        current = self.notebook.select()
+        if current == str(self.purchases_view):
+            self.purchases_view.edit_selected()
+        elif current == str(self.money_view):
+            self.money_view.edit_selected()
+
+    def _add_current(self, event=None) -> None:
+        current = self.notebook.select()
+        if current == str(self.purchases_view):
+            self.purchases_view.add_new()
+        elif current == str(self.money_view):
+            self.money_view.add_new()
+
     def _sort_items(self) -> None:
         self.items.sort(key=attrgetter("date"), reverse=True)
 
@@ -195,6 +211,7 @@ class PurchasesView(ttk.Frame):
         self.tree.pack(fill="both", expand=True, padx=8, pady=6)
         self.tree.bind("<Double-1>", self._on_row_double_click)
         self.tree.bind("<Delete>", self._on_delete_key)
+        self.tree.bind("<Return>", self._on_row_double_click)
 
         summary = ttk.Frame(self)
         summary.pack(fill="x", padx=8, pady=(0, 6))
@@ -282,12 +299,18 @@ class PurchasesView(ttk.Frame):
     def _add_item(self) -> None:
         self.app.add_or_edit_item()
 
+    def add_new(self) -> None:
+        self._add_item()
+
     def _edit_item(self) -> None:
         record = self._get_selected_item()
         if not record:
             messagebox.showinfo("Edit Item", "Select a row to edit.")
             return
         self.app.add_or_edit_item(record)
+
+    def edit_selected(self) -> None:
+        self._edit_item()
 
     def _view_item(self) -> None:
         record = self._get_selected_item()
@@ -305,6 +328,9 @@ class PurchasesView(ttk.Frame):
             return
         self.app.items = [i for i in self.app.items if i.id != record.id]
         self.app.save_items(trigger_backup=self.app.settings["ui"].get("autosave", True))
+
+    def delete_selected(self) -> None:
+        self._delete_item()
 
     def _import_csv(self) -> None:
         try:
@@ -435,6 +461,7 @@ class MoneyView(ttk.Frame):
         self.tree.pack(fill="both", expand=True, padx=8, pady=6)
         self.tree.bind("<Double-1>", self._on_row_double_click)
         self.tree.bind("<Delete>", self._on_delete_key)
+        self.tree.bind("<Return>", self._on_row_double_click)
 
         summary = ttk.Frame(self)
         summary.pack(fill="x", padx=8, pady=(0, 6))
@@ -492,12 +519,18 @@ class MoneyView(ttk.Frame):
     def _add_entry(self) -> None:
         self.app.add_money_entry()
 
+    def add_new(self) -> None:
+        self._add_entry()
+
     def _edit_entry(self) -> None:
         record = self._get_selected_entry()
         if not record:
             messagebox.showinfo("Edit Entry", "Select a row to edit.")
             return
         self.app.add_money_entry(record)
+
+    def edit_selected(self) -> None:
+        self._edit_entry()
 
     def _delete_entry(self) -> None:
         record = self._get_selected_entry()
@@ -508,6 +541,9 @@ class MoneyView(ttk.Frame):
             return
         self.app.money = [m for m in self.app.money if m.id != record.id]
         self.app.save_money(trigger_backup=self.app.settings["ui"].get("autosave", True))
+
+    def delete_selected(self) -> None:
+        self._delete_entry()
 
     def _update_summary(self, income: float, expense: float) -> None:
         balance = income - expense
