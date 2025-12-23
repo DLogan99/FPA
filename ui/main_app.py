@@ -69,10 +69,12 @@ class FinancePlannerApp(tk.Tk):
         self.notebook.add(self.money_view, text="Money")
         self.notebook.add(self.settings_view, text="Settings")
 
+        self._build_menu()
         self._load_data()
         self.bind_all("<Control-f>", self._focus_search)
         self.bind_all("<Control-e>", self._edit_current)
         self.bind_all("<Control-n>", self._add_current)
+        self.bind_all("<F1>", self._show_shortcuts)
         self._sort_items()
         self._sort_money()
 
@@ -171,6 +173,35 @@ class FinancePlannerApp(tk.Tk):
 
     def _sort_money(self) -> None:
         self.money.sort(key=attrgetter("date"), reverse=True)
+
+    def _build_menu(self) -> None:
+        menubar = tk.Menu(self)
+        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(label="Keyboard shortcuts (F1)", command=self._show_shortcuts, accelerator="F1")
+        menubar.add_cascade(label="Help", menu=help_menu)
+        self.config(menu=menubar)
+
+    def _show_shortcuts(self, event=None) -> None:
+        top = tk.Toplevel(self)
+        top.title("Keyboard shortcuts")
+        top.grab_set()
+        pad = {"padx": 10, "pady": 6}
+        shortcuts = [
+            ("Ctrl+F", "Focus search in current tab"),
+            ("Ctrl+N", "Add item/entry in current tab"),
+            ("Ctrl+E", "Edit selected row in current tab"),
+            ("Enter", "Edit selected row"),
+            ("Delete", "Delete selected row"),
+            ("Double-click", "Edit selected row"),
+        ]
+        ttk.Label(top, text="Keyboard & Mouse Shortcuts", font=("TkDefaultFont", 11, "bold")).grid(
+            row=0, column=0, sticky="w", **pad
+        )
+        for idx, (keys, desc) in enumerate(shortcuts, start=1):
+            ttk.Label(top, text=keys).grid(row=idx, column=0, sticky="w", **pad)
+            ttk.Label(top, text=desc).grid(row=idx, column=1, sticky="w", **pad)
+        ttk.Button(top, text="Close", command=top.destroy).grid(row=len(shortcuts) + 1, column=1, sticky="e", **pad)
+        top.columnconfigure(1, weight=1)
 
 
 class PurchasesView(ttk.Frame):
