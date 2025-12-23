@@ -1,11 +1,10 @@
 import csv
 import tkinter as tk
 from datetime import datetime
+from operator import attrgetter
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Dict, List, Optional
 from uuid import uuid4
-
-from operator import attrgetter
 
 from core.backup import create_backup
 from core.config_manager import ConfigManager, ensure_paths
@@ -75,8 +74,6 @@ class FinancePlannerApp(tk.Tk):
         self.bind_all("<Control-e>", self._edit_current)
         self.bind_all("<Control-n>", self._add_current)
         self.bind_all("<F1>", self._show_shortcuts)
-        self._sort_items()
-        self._sort_money()
 
     def _apply_theme(self) -> None:
         bg = self.theme.get("background", "#ffffff")
@@ -97,6 +94,8 @@ class FinancePlannerApp(tk.Tk):
     def _load_data(self) -> None:
         self.items = read_items(self.items_path)
         self.money = read_money(self.money_path)
+        self._sort_items()
+        self._sort_money()
         self.purchases_view.refresh_table()
         self.money_view.refresh_table()
 
@@ -123,6 +122,7 @@ class FinancePlannerApp(tk.Tk):
                 self.items = [record if i.id == existing.id else i for i in self.items]
             else:
                 self.items.append(record)
+            self._sort_items()
             self.save_items(trigger_backup=self.settings["ui"].get("autosave", True))
 
     def view_item(self, record: ItemRecord) -> None:
@@ -137,6 +137,7 @@ class FinancePlannerApp(tk.Tk):
                 self.money = [record if m.id == existing.id else m for m in self.money]
             else:
                 self.money.append(record)
+            self._sort_money()
             self.save_money(trigger_backup=self.settings["ui"].get("autosave", True))
 
     def change_theme(self, name: str) -> None:
