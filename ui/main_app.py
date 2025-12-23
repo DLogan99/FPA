@@ -210,6 +210,7 @@ class PurchasesView(ttk.Frame):
         super().__init__(parent)
         self.app = app
         self.search_var = tk.StringVar(value="")
+        self.score_filter_var = tk.StringVar(value="all")
         self.total_cost_var = tk.StringVar(value=f"{self.app.currency_symbol}0.00")
         self.avg_score_var = tk.StringVar(value="0.00")
         self.count_var = tk.StringVar(value="0 items")
@@ -233,6 +234,15 @@ class PurchasesView(ttk.Frame):
         self.search_entry.pack(side="left", fill="x", expand=True, padx=(6, 0))
         self.search_entry.bind("<KeyRelease>", self._on_search)
         ttk.Button(search_frame, text="Clear", command=self._clear_search).pack(side="left", padx=(6, 0))
+        ttk.Label(search_frame, text="Score filter").pack(side="left", padx=(8, 2))
+        ttk.Combobox(
+            search_frame,
+            textvariable=self.score_filter_var,
+            values=["all", "high (>4)", "low (<2.5)"],
+            state="readonly",
+            width=10,
+        ).pack(side="left")
+        self.score_filter_var.trace_add("write", lambda *_: self.refresh_table())
 
         columns = ("product", "date", "cost", "urgency", "overall")
         self.tree = ttk.Treeview(self, columns=columns, show="headings")
@@ -400,19 +410,31 @@ class PurchasesView(ttk.Frame):
     def _filtered_items(self) -> List[ItemRecord]:
         query = self.search_var.get().strip().lower()
         if not query:
-            return list(self.app.items)
+            filtered = list(self.app.items)
+        else:
+            filtered = []
+            for item in self.app.items:
+                haystack = " ".join(
+                    [
+                        item.product,
+                        item.description,
+                        item.location,
+                        item.reference,
+                        item.justification,
+                    ]
+                ).lower()
+                if query in haystack:
+                    filtered.append(item)
+        filter_mode = self.score_filter_var.get()
+        if filter_mode.startswith("high"):
+            filtered = [i for i in filtered if (i.overall_score or 0) > 4]
+        elif filter_mode.startswith("low"):
+            filtered = [i for i in filtered if (i.overall_score or 0) < 2.5]
         result = []
-        for item in self.app.items:
-            haystack = " ".join(
-                [
-                    item.product,
-                    item.description,
-                    item.location,
-                    item.reference,
-                    item.justification,
-                ]
-            ).lower()
-            if query in haystack:
+        seen = set()
+        for item in filtered:
+            if item.id not in seen:
+                seen.add(item.id)
                 result.append(item)
         return result
 
@@ -464,6 +486,7 @@ class MoneyView(ttk.Frame):
         self.expense_var = tk.StringVar(value=f"{self.app.currency_symbol}0.00")
         self.balance_var = tk.StringVar(value=f"{self.app.currency_symbol}0.00")
         self.count_var = tk.StringVar(value="0 entries")
+        self.type_filter_var = tk.StringVar(value="all")
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -483,6 +506,15 @@ class MoneyView(ttk.Frame):
         self.search_entry.pack(side="left", fill="x", expand=True, padx=(6, 0))
         self.search_entry.bind("<KeyRelease>", self._on_search)
         ttk.Button(search_frame, text="Clear", command=self._clear_search).pack(side="left", padx=(6, 0))
+        ttk.Label(search_frame, text="Type").pack(side="left", padx=(8, 2))
+        ttk.Combobox(
+            search_frame,
+            textvariable=self.type_filter_var,
+            values=["all", "income", "expense"],
+            state="readonly",
+            width=10,
+        ).pack(side="left")
+        self.type_filter_var.trace_add("write", lambda *_: self.refresh_table())
 
         columns = ("date", "type", "source", "amount", "linked_item")
         self.tree = ttk.Treeview(self, columns=columns, show="headings")
@@ -586,23 +618,35 @@ class MoneyView(ttk.Frame):
     def _filtered_entries(self) -> List[MoneyRecord]:
         query = self.search_var.get().strip().lower()
         if not query:
-            return list(self.app.money)
+            candidates = list(self.app.money)
+        else:
+            id_to_product = {item.id: item.product for item in self.app.items}
+            candidates = []
+            for entry in self.app.money:
+                linked_product = id_to_product.get(entry.linked_item_id, "")
+                fields = " ".join(
+                    [
+                        entry.entry_type,
+                        entry.source_or_destination,
+                        entry.notes,
+                        entry.linked_item_id,
+                        linked_product,
+                    ]
+                ).lower()
+                if query in fields:
+                    candidates.append(entry)
+        filter_type = self.type_filter_var.get().lower()
+        if filter_type in {"income", "expense"}:
+            candidates = [e for e in candidates if e.entry_type.lower() == filter_type]
         id_to_product = {item.id: item.product for item in self.app.items}
-        matches = []
-        for entry in self.app.money:
-            linked_product = id_to_product.get(entry.linked_item_id, "")
-            fields = " ".join(
-                [
-                    entry.entry_type,
-                    entry.source_or_destination,
-                    entry.notes,
-                    entry.linked_item_id,
-                    linked_product,
-                ]
-            ).lower()
-            if query in fields:
-                matches.append(entry)
-        return matches
+        deduped = []
+        seen = set()
+        for entry in candidates:
+            if entry.id in seen:
+                continue
+            seen.add(entry.id)
+            deduped.append(entry)
+        return deduped
 
     def _on_search(self, event=None) -> None:
         self.refresh_table()
