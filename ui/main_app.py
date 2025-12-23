@@ -2,6 +2,9 @@ import csv
 import tkinter as tk
 from datetime import datetime
 from operator import attrgetter
+import os
+import subprocess
+import sys
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Dict, List, Optional
 from uuid import uuid4
@@ -740,6 +743,7 @@ class SettingsView(ttk.Frame):
         ttk.Checkbutton(self, variable=self.autosave_var, command=self._toggle_autosave).grid(row=1, column=1, sticky="w", **pad)
 
         ttk.Button(self, text="Backup Now", command=self._backup_now).grid(row=2, column=0, **pad)
+        ttk.Button(self, text="Open data folder", command=self._open_data_dir).grid(row=2, column=1, sticky="w", **pad)
 
         self.columnconfigure(1, weight=1)
 
@@ -762,6 +766,27 @@ class SettingsView(ttk.Frame):
             messagebox.showinfo("Backup", "Backups created.")
         except FileNotFoundError as exc:
             show_error_dialog(self, "Backup", "Backup failed.", str(exc))
+
+    def _open_data_dir(self) -> None:
+        paths = [
+            os.path.dirname(self.app.items_path),
+            os.path.dirname(self.app.money_path),
+            self.app.backup_dir,
+        ]
+        # pick the first existing path
+        target = next((p for p in paths if p and os.path.exists(p)), None)
+        if not target:
+            messagebox.showinfo("Open folder", "Data folder not found yet. Save data first.")
+            return
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(target)  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.check_call(["open", target])
+            else:
+                subprocess.check_call(["xdg-open", target])
+        except Exception as exc:
+            show_error_dialog(self, "Open folder", "Unable to open data folder.", str(exc))
 
 
 class ItemDialog:
