@@ -61,7 +61,10 @@ class FinancePlannerApp(tk.Tk):
         self.items: List[ItemRecord] = []
         self.money: List[MoneyRecord] = []
 
-        self.notebook = ttk.Notebook(self)
+        container = ttk.Frame(self, padding=10)
+        container.pack(fill="both", expand=True)
+
+        self.notebook = ttk.Notebook(container)
         self.notebook.pack(fill="both", expand=True)
 
         self.purchases_view = PurchasesView(self, self)
