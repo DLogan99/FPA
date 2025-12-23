@@ -90,7 +90,10 @@ class FinancePlannerApp(tk.Tk):
         self.style.configure("TFrame", background=bg)
         self.style.configure("TLabel", background=bg, foreground=fg)
         self.style.configure("TButton", background=accent, foreground=fg, padding=6)
-        self.style.configure("Treeview", background=row_bg, foreground=fg, fieldbackground=row_bg)
+        self.style.configure("TEntry", fieldbackground=row_bg, foreground=fg, padding=4)
+        self.style.configure("Treeview", background=row_bg, foreground=fg, fieldbackground=row_bg, borderwidth=0, relief="flat")
+        self.style.configure("TNotebook", background=bg, tabmargins=2)
+        self.style.configure("TNotebook.Tab", padding=(10, 6))
         self.style.map("TButton", background=[("active", accent)])
         self.style.configure("HighScore.Treeview", foreground="#16a34a")
         self.style.configure("LowScore.Treeview", foreground="#dc2626")
@@ -837,6 +840,7 @@ class DatePickerDialog:
         self.top = tk.Toplevel(parent)
         self.top.title("Pick a date")
         self.top.grab_set()
+        self.top.configure(padx=6, pady=6)
         self.current = initial
         self._build_ui()
         self._render_days()
@@ -846,7 +850,7 @@ class DatePickerDialog:
         header = ttk.Frame(self.top)
         header.pack(fill="x", **pad)
         ttk.Button(header, text="◀", width=3, command=self._prev_month).pack(side="left")
-        self.month_label = ttk.Label(header, text="", width=18, anchor="center")
+        self.month_label = ttk.Label(header, text="", width=20, anchor="center")
         self.month_label.pack(side="left", expand=True)
         ttk.Button(header, text="▶", width=3, command=self._next_month).pack(side="left")
 
@@ -909,6 +913,7 @@ class ItemDialog:
         self.top = tk.Toplevel(app)
         self.top.title("Item" if not existing else "Edit Item")
         self.top.grab_set()
+        self.top.configure(padx=6, pady=6)
         self.result: Optional[ItemRecord] = None
         self.existing = existing
         self._build_ui()
@@ -1065,6 +1070,7 @@ class MoneyDialog:
         self.top = tk.Toplevel(app)
         self.top.title("Money Entry" if not existing else "Edit Money Entry")
         self.top.grab_set()
+        self.top.configure(padx=6, pady=6)
         self.result: Optional[MoneyRecord] = None
         self.existing = existing
         self._build_ui()
