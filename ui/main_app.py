@@ -768,14 +768,21 @@ class SettingsView(ttk.Frame):
             show_error_dialog(self, "Backup", "Backup failed.", str(exc))
 
     def _open_data_dir(self) -> None:
-        paths = [
-            os.path.dirname(self.app.items_path),
-            os.path.dirname(self.app.money_path),
-            self.app.backup_dir,
-        ]
-        # pick the first existing path
-        target = next((p for p in paths if p and os.path.exists(p)), None)
-        if not target:
+        paths = {
+            "items": os.path.dirname(self.app.items_path),
+            "money": os.path.dirname(self.app.money_path),
+            "backup": self.app.backup_dir,
+        }
+        target = None
+        for path in paths.values():
+            if path:
+                try:
+                    os.makedirs(path, exist_ok=True)
+                    target = path
+                    break
+                except OSError:
+                    continue
+        if not target or not os.path.exists(target):
             messagebox.showinfo("Open folder", "Data folder not found yet. Save data first.")
             return
         try:
