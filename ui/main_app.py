@@ -745,6 +745,13 @@ class SettingsView(ttk.Frame):
         ttk.Button(self, text="Backup Now", command=self._backup_now).grid(row=2, column=0, **pad)
         ttk.Button(self, text="Open data folder", command=self._open_data_dir).grid(row=2, column=1, sticky="w", **pad)
 
+        ttk.Label(self, text="Items file").grid(row=3, column=0, sticky="w", **pad)
+        self._make_path_row(row=3, path=self.app.items_path, pad=pad)
+        ttk.Label(self, text="Money file").grid(row=4, column=0, sticky="w", **pad)
+        self._make_path_row(row=4, path=self.app.money_path, pad=pad)
+        ttk.Label(self, text="Backup folder").grid(row=5, column=0, sticky="w", **pad)
+        self._make_path_row(row=5, path=self.app.backup_dir, pad=pad)
+
         self.columnconfigure(1, weight=1)
 
     def refresh_theme_dropdown(self) -> None:
@@ -794,6 +801,23 @@ class SettingsView(ttk.Frame):
                 subprocess.check_call(["xdg-open", target])
         except Exception as exc:
             show_error_dialog(self, "Open folder", "Unable to open data folder.", str(exc))
+
+    def _make_path_row(self, row: int, path: str, pad: Dict[str, int]) -> None:
+        frame = ttk.Frame(self)
+        frame.grid(row=row, column=1, sticky="ew", **pad)
+        label = ttk.Entry(frame)
+        label.insert(0, path)
+        label.config(state="readonly")
+        label.pack(side="left", fill="x", expand=True)
+        ttk.Button(frame, text="Copy", command=lambda p=path: self._copy_path(p)).pack(side="left", padx=4)
+        frame.columnconfigure(0, weight=1)
+
+    def _copy_path(self, path: str) -> None:
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(path)
+        except Exception as exc:
+            show_error_dialog(self, "Copy", "Failed to copy path.", str(exc))
 
 
 class ItemDialog:
