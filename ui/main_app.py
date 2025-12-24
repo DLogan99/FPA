@@ -432,6 +432,7 @@ class MoneyWidget(QtWidgets.QWidget):
         return results
 
     def refresh(self) -> None:
+        id_to_product = {item.id: item.product for item in self.main.items}
         entries = self._filtered_entries()
         self.table.setRowCount(len(entries))
         income = 0.0
