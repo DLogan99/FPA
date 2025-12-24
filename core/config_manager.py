@@ -13,8 +13,10 @@ class ConfigManager:
         settings_path: str = "config/settings.json",
         weights_path: str = "config/weights.json",
         themes_path: str = "config/themes.json",
+        base_dir: Optional[str] = None,
     ) -> None:
         self.bundle_dir = getattr(sys, "_MEIPASS", os.getcwd())
+        self.base_dir = os.path.abspath(base_dir or self.bundle_dir)
         self.user_root = self._user_data_root()
         self.settings_path = self._user_path(settings_path)
         self.weights_path = self._user_path(weights_path)
