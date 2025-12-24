@@ -17,6 +17,7 @@ from scoring.scoring import ScoreResult, score_item
 
 
 def launch() -> None:
+    _detach_console_on_windows()
     app = QtWidgets.QApplication(sys.argv)
     config = ConfigManager()
     ensure_paths(config.settings)
@@ -55,7 +56,6 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addWidget(self.tabs)
         self.setCentralWidget(container)
 
-        self._build_menu()
         self._load_data()
         self._setup_shortcuts()
 
@@ -732,3 +732,11 @@ class MoneyDialog(QtWidgets.QDialog):
 
 if __name__ == "__main__":
     launch()
+
+
+def _detach_console_on_windows() -> None:
+    if sys.platform.startswith("win") and hasattr(ctypes, "windll"):
+        try:
+            ctypes.windll.kernel32.FreeConsole()
+        except Exception:
+            pass
