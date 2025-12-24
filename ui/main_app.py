@@ -140,9 +140,8 @@ def launch() -> None:
     app = QtWidgets.QApplication(sys.argv)
     config = ConfigManager()
     ensure_paths(config.settings)
-    theme = config.get_theme()
-    app.setStyleSheet(_build_style_sheet(theme))
     window = MainWindow(config)
+    window.apply_theme()
     window.show()
     sys.exit(app.exec())
 
@@ -277,6 +276,20 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.money.append(record)
             self._sort_money()
             self.save_money(trigger_backup=self.settings["ui"].get("autosave", True))
+
+    def build_style_sheet(self, theme_name: Optional[str] = None) -> str:
+        theme = self.config_manager.get_theme(theme_name)
+        return _build_style_sheet(theme)
+
+    def apply_theme(self, theme_name: Optional[str] = None) -> None:
+        app = QtWidgets.QApplication.instance()
+        self.theme = self.config_manager.get_theme(theme_name)
+        if app:
+            app.setStyleSheet(self.build_style_sheet(theme_name))
+
+    def set_theme(self, theme_name: str) -> None:
+        self.config_manager.set_default_theme(theme_name)
+        self.apply_theme(theme_name)
 
 
 class PurchasesWidget(QtWidgets.QWidget):
@@ -655,6 +668,16 @@ class SettingsWidget(QtWidgets.QWidget):
         self.autosave_check.stateChanged.connect(self._toggle_autosave)
         layout.addRow("Autosave", self.autosave_check)
 
+        layout.addRow(_section_label("Appearance"))
+        self.theme_combo = QtWidgets.QComboBox()
+        theme_names = list(self.main.config_manager.themes.keys())
+        self.theme_combo.addItems(theme_names)
+        current_theme = self.main.settings.get("themes", {}).get("default", "light")
+        if current_theme in theme_names:
+            self.theme_combo.setCurrentText(current_theme)
+        self.theme_combo.currentTextChanged.connect(self._change_theme)
+        layout.addRow("Theme", self.theme_combo)
+
         backup_btn = QtWidgets.QPushButton("Backup now")
         backup_btn.clicked.connect(self._backup_now)
         open_btn = QtWidgets.QPushButton("Open data folder")
@@ -671,6 +694,9 @@ class SettingsWidget(QtWidgets.QWidget):
     def _toggle_autosave(self, state: int) -> None:
         self.main.settings["ui"]["autosave"] = bool(state)
         self.main.config_manager.save_settings()
+
+    def _change_theme(self, name: str) -> None:
+        self.main.set_theme(name)
 
     def _backup_now(self) -> None:
         try:
