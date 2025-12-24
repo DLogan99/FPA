@@ -95,8 +95,8 @@ class FinancePlannerApp(tk.Tk):
         self.style.configure("TButton", background=accent, foreground=fg, padding=6)
         self.style.configure("TEntry", fieldbackground=row_bg, foreground=fg, padding=4)
         self.style.configure("Treeview", background=row_bg, foreground=fg, fieldbackground=row_bg, borderwidth=0, relief="flat")
-        self.style.configure("TNotebook", background=bg, tabmargins=2)
-        self.style.configure("TNotebook.Tab", padding=(10, 6))
+        self.style.configure("TNotebook", background=bg, tabmargins=4)
+        self.style.configure("TNotebook.Tab", padding=(12, 8))
         self.style.map("TButton", background=[("active", accent)])
         self.style.configure("HighScore.Treeview", foreground="#16a34a")
         self.style.configure("LowScore.Treeview", foreground="#dc2626")
@@ -946,6 +946,7 @@ class ItemDialog:
         date_row.grid(row=0, column=1, sticky="ew", **pad)
         ttk.Entry(date_row, textvariable=self.date_var).pack(side="left", fill="x", expand=True, padx=(0, 4))
         ttk.Button(date_row, text="Pick", command=self._pick_date, width=6).pack(side="left")
+        self.date_var.trace_add("write", lambda *_: self._clear_invalid_state())
 
         row = 1
         for label, key in fields:
@@ -1090,6 +1091,7 @@ class MoneyDialog:
         date_row.grid(row=0, column=1, sticky="ew", **pad)
         ttk.Entry(date_row, textvariable=self.date_var).pack(side="left", fill="x", expand=True, padx=(0, 4))
         ttk.Button(date_row, text="Pick", command=self._pick_date, width=6).pack(side="left")
+        self.date_var.trace_add("write", lambda *_: self._clear_invalid_state())
 
         ttk.Label(self.top, text="Type").grid(row=1, column=0, sticky="w", **pad)
         self.type_var = tk.StringVar(value="income")
