@@ -55,6 +55,7 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addWidget(self.tabs)
         self.setCentralWidget(container)
 
+        self._build_menu()
         self._load_data()
         self._setup_shortcuts()
 
