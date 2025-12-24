@@ -230,9 +230,9 @@ class PurchasesView(ttk.Frame):
         btn_frame = ttk.Frame(self)
         btn_frame.pack(fill="x", padx=8, pady=6)
         ttk.Button(btn_frame, text="Add Item", command=self._add_item).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="Edit Selected", command=self._edit_item).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="View Selected", command=self._view_item).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="Delete Selected", command=self._delete_item).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="Edit", command=self._edit_item).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="View", command=self._view_item).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="Delete", command=self._delete_item).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Refresh", command=self.refresh_table).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Import CSV", command=self._import_csv).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Export CSV", command=self._export_csv).pack(side="left", padx=4)
@@ -503,8 +503,8 @@ class MoneyView(ttk.Frame):
         btn_frame = ttk.Frame(self)
         btn_frame.pack(fill="x", padx=8, pady=6)
         ttk.Button(btn_frame, text="Add Entry", command=self._add_entry).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="Edit Selected", command=self._edit_entry).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="Delete Selected", command=self._delete_entry).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="Edit", command=self._edit_entry).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="Delete", command=self._delete_entry).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Refresh", command=self.refresh_table).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Import CSV", command=self._import_csv).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Export CSV", command=self._export_csv).pack(side="left", padx=4)
@@ -862,6 +862,8 @@ class DatePickerDialog:
 
         ttk.Button(self.top, text="Today", command=self._set_today).pack(side="left", padx=pad["padx"], pady=pad["pady"])
         ttk.Button(self.top, text="Close", command=self.top.destroy).pack(side="right", padx=pad["padx"], pady=pad["pady"])
+        self.top.bind("<Return>", lambda event: self._set_today())
+        self.top.bind("<Escape>", lambda event: self.top.destroy())
 
     def _render_days(self) -> None:
         for widget in self.days_frame.winfo_children():
@@ -942,8 +944,8 @@ class ItemDialog:
         ttk.Label(self.top, text="Date").grid(row=0, column=0, sticky="w", **pad)
         date_row = ttk.Frame(self.top)
         date_row.grid(row=0, column=1, sticky="ew", **pad)
-        ttk.Entry(date_row, textvariable=self.date_var).pack(side="left", fill="x", expand=True)
-        ttk.Button(date_row, text="Pick", command=self._pick_date).pack(side="left", padx=(6, 0))
+        ttk.Entry(date_row, textvariable=self.date_var).pack(side="left", fill="x", expand=True, padx=(0, 4))
+        ttk.Button(date_row, text="Pick", command=self._pick_date, width=6).pack(side="left")
 
         row = 1
         for label, key in fields:
@@ -1086,8 +1088,8 @@ class MoneyDialog:
         ttk.Label(self.top, text="Date").grid(row=0, column=0, sticky="w", **pad)
         date_row = ttk.Frame(self.top)
         date_row.grid(row=0, column=1, sticky="ew", **pad)
-        ttk.Entry(date_row, textvariable=self.date_var).pack(side="left", fill="x", expand=True)
-        ttk.Button(date_row, text="Pick", command=self._pick_date).pack(side="left", padx=(6, 0))
+        ttk.Entry(date_row, textvariable=self.date_var).pack(side="left", fill="x", expand=True, padx=(0, 4))
+        ttk.Button(date_row, text="Pick", command=self._pick_date, width=6).pack(side="left")
 
         ttk.Label(self.top, text="Type").grid(row=1, column=0, sticky="w", **pad)
         self.type_var = tk.StringVar(value="income")
