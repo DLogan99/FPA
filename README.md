@@ -1,23 +1,25 @@
-# Finance Planner (Rust rewrite)
+# Finance Planner (Python)
 
-Local-first finance planner rewritten in Rust. Stores data in CSV and configurable JSON files under your OS data directory (e.g., `%APPDATA%/finance_planner` on Windows or `~/.local/share/finance_planner` on Linux).
+Local-first finance planner built with Tkinter. Data is stored in CSV files with configurable JSON settings, weights, and themes. Defaults are bundled and copied to your OS data directory on first run (e.g., `%APPDATA%/finance_planner` on Windows or `~/.local/share/finance_planner` on Linux).
 
 ## Features
-- Purchases/Items: add, list, delete, import from CSV. Scores computed via configurable weights.
-- Money: add and list entries, optionally link to items by ID.
-- Settings: show paths and current theme name.
+- Purchases/Items: add, edit, view, delete, import/export CSV, search/filter, and score via configurable weights with total spend, average score, and item counts.
+- Money: track income/expense entries, search/filter, import/export CSV, link to purchases by ID, and see income/expense totals with a running balance and entry counts.
+- Keyboard and mouse shortcuts: double-click rows to edit, Delete to remove selected rows, Ctrl+F to search, Ctrl+N/Ctrl+E to add/edit, Enter to edit a selected row.
+- Shortcut help: press F1 or use Help → Keyboard shortcuts for a quick list.
+- Quick filtering: score filters for purchases (high/low) and type filters for money (income/expense) alongside text search.
+- Date pickers: use the Pick button on date fields in item and money dialogs for a quick calendar selection.
+- Settings: update UI basics, back up on-demand, open the data folder, and copy key file paths (items, money, backups).
+- Settings: update currency formatting, date display, theme, and backup retention.
 - Backups: timestamped copies with retention (3 recent + 3 historical by default).
 - Config and themes are user-writable JSON in the data directory; defaults are auto-created on first run.
 
 ## Install / Run
+Install dependencies (PySide6 for the Qt UI) then run:
+
 ```bash
-cargo run -- items add --product "Widget" --cost 25 --urgency 3 --value 4 --price-comp 3 --effect 3 --justification "Need"
-
-cargo run -- items list
-
-cargo run -- money add --entry-type expense --source-or-destination "Store" --amount 25
-
-cargo run -- settings show
+pip install PySide6
+python app.py
 ```
 
 ## Data locations
@@ -28,12 +30,16 @@ cargo run -- settings show
 - Money: `<data_dir>/data/money.csv`
 - Backups: `<data_dir>/backups/`
 
-## Building
+## Building standalone binaries (PyInstaller)
 ```bash
-cargo build --release
+# Linux/macOS
+pyinstaller app.py --onefile --name finance_planner --add-data "config:config"
+
+# Windows (note the path separator)
+pyinstaller app.py --onefile --name finance_planner --add-data "config;config"
 ```
 
-Artifacts will be in `target/release/finance_planner` (Linux) or `target\release\finance_planner.exe` (Windows).
+Binaries will appear under `dist/` (`finance_planner` on Linux/macOS, `finance_planner.exe` on Windows).
 
 ## CI artifacts
-GitHub Actions workflow `.github/workflows/build.yml` builds release binaries for Linux and Windows and uploads them as artifacts on each push/PR (including this `rust-rewrite` branch). Download them from the workflow run's Artifacts section.
+GitHub Actions workflow `.github/workflows/build.yml` builds standalone binaries for Linux and Windows using PyInstaller and uploads them as artifacts on each push/PR.
