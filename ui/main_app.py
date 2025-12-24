@@ -337,9 +337,10 @@ class PurchasesWidget(QtWidgets.QWidget):
             return
         try:
             write_items(path, self._filtered_items())
-        QtWidgets.QMessageBox.information(self, "Export", "Items exported.")
         except Exception as exc:
             QtWidgets.QMessageBox.critical(self, "Export failed", str(exc))
+        else:
+            QtWidgets.QMessageBox.information(self, "Export", "Items exported.")
 
     def _clear_filters(self) -> None:
         self.search_edit.clear()
