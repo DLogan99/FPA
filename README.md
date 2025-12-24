@@ -8,6 +8,7 @@ Local-first finance planner built with Tkinter. Data is stored in CSV files with
 - Keyboard and mouse shortcuts: double-click rows to edit, Delete to remove selected rows, Ctrl+F to search, Ctrl+N/Ctrl+E to add/edit, Enter to edit a selected row.
 - Shortcut help: press F1 or use Help → Keyboard shortcuts for a quick list.
 - Quick filtering: score filters for purchases (high/low) and type filters for money (income/expense) alongside text search.
+- Date pickers: use the Pick button on date fields in item and money dialogs for a quick calendar selection.
 - Settings: update UI basics, back up on-demand, open the data folder, and copy key file paths (items, money, backups).
 - Settings: update currency formatting, date display, theme, and backup retention.
 - Backups: timestamped copies with retention (3 recent + 3 historical by default).

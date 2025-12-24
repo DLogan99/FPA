@@ -1,10 +1,11 @@
+import calendar
 import csv
-import tkinter as tk
-from datetime import datetime
-from operator import attrgetter
 import os
 import subprocess
 import sys
+import tkinter as tk
+from datetime import datetime
+from operator import attrgetter
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Dict, List, Optional
 from uuid import uuid4
@@ -60,7 +61,10 @@ class FinancePlannerApp(tk.Tk):
         self.items: List[ItemRecord] = []
         self.money: List[MoneyRecord] = []
 
-        self.notebook = ttk.Notebook(self)
+        container = ttk.Frame(self, padding=10)
+        container.pack(fill="both", expand=True)
+
+        self.notebook = ttk.Notebook(container)
         self.notebook.pack(fill="both", expand=True)
 
         self.purchases_view = PurchasesView(self, self)
@@ -89,7 +93,10 @@ class FinancePlannerApp(tk.Tk):
         self.style.configure("TFrame", background=bg)
         self.style.configure("TLabel", background=bg, foreground=fg)
         self.style.configure("TButton", background=accent, foreground=fg, padding=6)
-        self.style.configure("Treeview", background=row_bg, foreground=fg, fieldbackground=row_bg)
+        self.style.configure("TEntry", fieldbackground=row_bg, foreground=fg, padding=4)
+        self.style.configure("Treeview", background=row_bg, foreground=fg, fieldbackground=row_bg, borderwidth=0, relief="flat")
+        self.style.configure("TNotebook", background=bg, tabmargins=4)
+        self.style.configure("TNotebook.Tab", padding=(12, 8))
         self.style.map("TButton", background=[("active", accent)])
         self.style.configure("HighScore.Treeview", foreground="#16a34a")
         self.style.configure("LowScore.Treeview", foreground="#dc2626")
@@ -223,9 +230,9 @@ class PurchasesView(ttk.Frame):
         btn_frame = ttk.Frame(self)
         btn_frame.pack(fill="x", padx=8, pady=6)
         ttk.Button(btn_frame, text="Add Item", command=self._add_item).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="Edit Selected", command=self._edit_item).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="View Selected", command=self._view_item).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="Delete Selected", command=self._delete_item).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="Edit", command=self._edit_item).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="View", command=self._view_item).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="Delete", command=self._delete_item).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Refresh", command=self.refresh_table).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Import CSV", command=self._import_csv).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Export CSV", command=self._export_csv).pack(side="left", padx=4)
@@ -496,8 +503,8 @@ class MoneyView(ttk.Frame):
         btn_frame = ttk.Frame(self)
         btn_frame.pack(fill="x", padx=8, pady=6)
         ttk.Button(btn_frame, text="Add Entry", command=self._add_entry).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="Edit Selected", command=self._edit_entry).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="Delete Selected", command=self._delete_entry).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="Edit", command=self._edit_entry).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="Delete", command=self._delete_entry).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Refresh", command=self.refresh_table).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Import CSV", command=self._import_csv).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Export CSV", command=self._export_csv).pack(side="left", padx=4)
@@ -820,12 +827,98 @@ class SettingsView(ttk.Frame):
             show_error_dialog(self, "Copy", "Failed to copy path.", str(exc))
 
 
+class DatePickerDialog:
+    @staticmethod
+    def pick(parent: tk.Tk, current_value: str, date_fmt: str) -> Optional[datetime]:
+        try:
+            current = datetime.strptime(current_value, date_fmt)
+        except Exception:
+            current = datetime.now()
+        dialog = DatePickerDialog(parent, current)
+        parent.wait_window(dialog.top)
+        return dialog.result
+
+    def __init__(self, parent: tk.Tk, initial: datetime):
+        self.result: Optional[datetime] = None
+        self.top = tk.Toplevel(parent)
+        self.top.title("Pick a date")
+        self.top.grab_set()
+        self.top.configure(padx=6, pady=6)
+        self.current = initial
+        self._build_ui()
+        self._render_days()
+
+    def _build_ui(self) -> None:
+        pad = {"padx": 6, "pady": 4}
+        header = ttk.Frame(self.top)
+        header.pack(fill="x", **pad)
+        ttk.Button(header, text="◀", width=3, command=self._prev_month).pack(side="left")
+        self.month_label = ttk.Label(header, text="", width=20, anchor="center")
+        self.month_label.pack(side="left", expand=True)
+        ttk.Button(header, text="▶", width=3, command=self._next_month).pack(side="left")
+
+        self.days_frame = ttk.Frame(self.top)
+        self.days_frame.pack(fill="both", expand=True, **pad)
+
+        ttk.Button(self.top, text="Today", command=self._set_today).pack(side="left", padx=pad["padx"], pady=pad["pady"])
+        ttk.Button(self.top, text="Close", command=self.top.destroy).pack(side="right", padx=pad["padx"], pady=pad["pady"])
+        self.top.bind("<Return>", lambda event: self._set_today())
+        self.top.bind("<Escape>", lambda event: self.top.destroy())
+
+    def _render_days(self) -> None:
+        for widget in self.days_frame.winfo_children():
+            widget.destroy()
+        self.month_label.config(text=self.current.strftime("%B %Y"))
+        days = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+        for idx, name in enumerate(days):
+            ttk.Label(self.days_frame, text=name, anchor="center").grid(row=0, column=idx, padx=2, pady=2)
+        month_calendar = calendar.Calendar(firstweekday=0).monthdatescalendar(self.current.year, self.current.month)
+        for r, week in enumerate(month_calendar, start=1):
+            for c, day in enumerate(week):
+                btn = ttk.Button(
+                    self.days_frame,
+                    text=str(day.day),
+                    width=4,
+                    command=lambda d=day: self._choose(d),
+                )
+                state = "normal" if day.month == self.current.month else "disabled"
+                btn.state([state] if state != "normal" else [])
+                btn.grid(row=r, column=c, padx=1, pady=1)
+
+    def _choose(self, day: datetime.date) -> None:
+        self.result = datetime.combine(day, datetime.min.time())
+        self.top.destroy()
+
+    def _prev_month(self) -> None:
+        year = self.current.year
+        month = self.current.month - 1
+        if month == 0:
+            month = 12
+            year -= 1
+        self.current = self.current.replace(year=year, month=month, day=1)
+        self._render_days()
+
+    def _next_month(self) -> None:
+        year = self.current.year
+        month = self.current.month + 1
+        if month == 13:
+            month = 1
+            year += 1
+        self.current = self.current.replace(year=year, month=month, day=1)
+        self._render_days()
+
+    def _set_today(self) -> None:
+        self.result = datetime.now()
+        self.top.destroy()
+
+
 class ItemDialog:
     def __init__(self, app: FinancePlannerApp, existing: Optional[ItemRecord] = None):
         self.app = app
         self.top = tk.Toplevel(app)
         self.top.title("Item" if not existing else "Edit Item")
         self.top.grab_set()
+        self.top.configure(padx=6, pady=6)
         self.result: Optional[ItemRecord] = None
         self.existing = existing
         self._build_ui()
@@ -849,7 +942,11 @@ class ItemDialog:
         ]
         self.date_var = tk.StringVar(value=datetime.now().strftime(self.app.date_fmt))
         ttk.Label(self.top, text="Date").grid(row=0, column=0, sticky="w", **pad)
-        ttk.Entry(self.top, textvariable=self.date_var).grid(row=0, column=1, sticky="ew", **pad)
+        date_row = ttk.Frame(self.top)
+        date_row.grid(row=0, column=1, sticky="ew", **pad)
+        ttk.Entry(date_row, textvariable=self.date_var).pack(side="left", fill="x", expand=True, padx=(0, 4))
+        ttk.Button(date_row, text="Pick", command=self._pick_date, width=6).pack(side="left")
+        self.date_var.trace_add("write", lambda *_: self._clear_invalid_state())
 
         row = 1
         for label, key in fields:
@@ -940,6 +1037,11 @@ class ItemDialog:
         else:
             self.recurrence_var.set("none")
 
+    def _pick_date(self) -> None:
+        selected = DatePickerDialog.pick(self.top, self.date_var.get(), self.app.date_fmt)
+        if selected:
+            self.date_var.set(selected.strftime(self.app.date_fmt))
+
 
 class ItemViewer:
     def __init__(self, app: FinancePlannerApp, record: ItemRecord):
@@ -974,6 +1076,7 @@ class MoneyDialog:
         self.top = tk.Toplevel(app)
         self.top.title("Money Entry" if not existing else "Edit Money Entry")
         self.top.grab_set()
+        self.top.configure(padx=6, pady=6)
         self.result: Optional[MoneyRecord] = None
         self.existing = existing
         self._build_ui()
@@ -984,7 +1087,11 @@ class MoneyDialog:
         pad = {"padx": 6, "pady": 4}
         self.date_var = tk.StringVar(value=datetime.now().strftime(self.app.date_fmt))
         ttk.Label(self.top, text="Date").grid(row=0, column=0, sticky="w", **pad)
-        ttk.Entry(self.top, textvariable=self.date_var).grid(row=0, column=1, sticky="ew", **pad)
+        date_row = ttk.Frame(self.top)
+        date_row.grid(row=0, column=1, sticky="ew", **pad)
+        ttk.Entry(date_row, textvariable=self.date_var).pack(side="left", fill="x", expand=True, padx=(0, 4))
+        ttk.Button(date_row, text="Pick", command=self._pick_date, width=6).pack(side="left")
+        self.date_var.trace_add("write", lambda *_: self._clear_invalid_state())
 
         ttk.Label(self.top, text="Type").grid(row=1, column=0, sticky="w", **pad)
         self.type_var = tk.StringVar(value="income")
@@ -1050,6 +1157,11 @@ class MoneyDialog:
         )
         self.result = record
         self.top.destroy()
+
+    def _pick_date(self) -> None:
+        selected = DatePickerDialog.pick(self.top, self.date_var.get(), self.app.date_fmt)
+        if selected:
+            self.date_var.set(selected.strftime(self.app.date_fmt))
 
 
 def launch() -> None:
