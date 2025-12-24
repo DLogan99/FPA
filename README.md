@@ -9,7 +9,7 @@ Local-first finance planner built with Tkinter. Data is stored in CSV files with
 - Shortcut help: press F1 or use Help → Keyboard shortcuts for a quick list.
 - Quick filtering: score filters for purchases (high/low) and type filters for money (income/expense) alongside text search.
 - Date pickers: use the Pick button on date fields in item and money dialogs for a quick calendar selection.
-- Settings: update UI basics, back up on-demand, open the data folder, and copy key file paths (items, money, backups).
+- Settings: update UI basics, back up on-demand, open the data or config folders, and copy key file paths (items, money, backups, settings/weights/themes).
 - Settings: update currency formatting, date display, theme, and backup retention.
 - Backups: timestamped copies with retention (3 recent + 3 historical by default).
 - Config and themes are user-writable JSON in the data directory; defaults are auto-created on first run.

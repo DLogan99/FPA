@@ -102,6 +102,17 @@ class MainWindow(QtWidgets.QMainWindow):
     def _sort_money(self) -> None:
         self.money.sort(key=lambda m: m.date, reverse=True)
 
+    def _rescore_items(self) -> None:
+        for item in self.items:
+            item.overall_score = score_item(item, self.weights).overall
+
+    def apply_weights(self, weights_cfg: dict) -> None:
+        self.weights = weights_cfg
+        self.config_manager.weights = weights_cfg
+        self.config_manager.save_weights()
+        self._rescore_items()
+        self.save_items(trigger_backup=False)
+
     def save_items(self, trigger_backup: bool = True) -> None:
         write_items(self.items_path, self.items)
         if trigger_backup:
@@ -529,14 +540,22 @@ class SettingsWidget(QtWidgets.QWidget):
         backup_btn.clicked.connect(self._backup_now)
         open_btn = QtWidgets.QPushButton("Open data folder")
         open_btn.clicked.connect(self._open_data_dir)
+        open_cfg_btn = QtWidgets.QPushButton("Open config folder")
+        open_cfg_btn.clicked.connect(self._open_config_dir)
         btn_row = QtWidgets.QHBoxLayout()
         btn_row.addWidget(backup_btn)
         btn_row.addWidget(open_btn)
+        btn_row.addWidget(open_cfg_btn)
         layout.addRow("Data", btn_row)
 
         self._add_path_row(layout, "Items file", self.main.items_path)
         self._add_path_row(layout, "Money file", self.main.money_path)
         self._add_path_row(layout, "Backups", self.main.backup_dir)
+        self._add_path_row(layout, "Config (settings.json)", self.main.config_manager.settings_path)
+        self._add_path_row(layout, "Weights (weights.json)", self.main.config_manager.weights_path)
+        self._add_path_row(layout, "Themes (themes.json)", self.main.config_manager.themes_path)
+
+        self._add_weights_group(layout)
 
     def _toggle_autosave(self, state: int) -> None:
         self.main.settings["ui"]["autosave"] = bool(state)
@@ -568,6 +587,17 @@ class SettingsWidget(QtWidgets.QWidget):
                 return
         QtWidgets.QMessageBox.information(self, "Open folder", "Data folder not found yet. Save data first.")
 
+    def _open_config_dir(self) -> None:
+        cfg_dir = Path(self.main.config_manager.settings_path).parent
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        target = str(cfg_dir)
+        if sys.platform.startswith("win"):
+            os.startfile(target)  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", target])
+        else:
+            subprocess.Popen(["xdg-open", target])
+
     def _add_path_row(self, layout: QtWidgets.QFormLayout, label: str, path: str) -> None:
         row = QtWidgets.QHBoxLayout()
         entry = QtWidgets.QLineEdit(path)
@@ -577,6 +607,41 @@ class SettingsWidget(QtWidgets.QWidget):
         row.addWidget(entry)
         row.addWidget(copy_btn)
         layout.addRow(label, row)
+
+    def _add_weights_group(self, layout: QtWidgets.QFormLayout) -> None:
+        group = QtWidgets.QGroupBox("Weights (admin)")
+        g_layout = QtWidgets.QFormLayout(group)
+        g_layout.setLabelAlignment(QtCore.Qt.AlignLeft)
+        self.weight_spins = {}
+        labels = [
+            ("Date", "date"),
+            ("Cost", "cost"),
+            ("Urgency", "urgency"),
+            ("Value", "value"),
+            ("Price vs Similar", "price_comp"),
+            ("Effect", "effect"),
+        ]
+        weights = self.main.weights.get("weights", {})
+        for label, key in labels:
+            spin = QtWidgets.QDoubleSpinBox()
+            spin.setRange(0.0, 10.0)
+            spin.setSingleStep(0.1)
+            spin.setValue(float(weights.get(key, 1.0)))
+            spin.setSuffix("×")
+            g_layout.addRow(f"{label} weight", spin)
+            self.weight_spins[key] = spin
+        save_btn = QtWidgets.QPushButton("Save weights")
+        save_btn.clicked.connect(self._save_weights)
+        g_layout.addRow(save_btn)
+        layout.addRow(group)
+
+    def _save_weights(self) -> None:
+        weights_cfg = self.main.weights
+        weights_cfg.setdefault("weights", {})
+        for key, spin in self.weight_spins.items():
+            weights_cfg["weights"][key] = spin.value()
+        self.main.apply_weights(weights_cfg)
+        QtWidgets.QMessageBox.information(self, "Weights", "Weights saved and applied.")
 
 
 class ItemDialog(QtWidgets.QDialog):
