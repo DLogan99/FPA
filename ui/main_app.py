@@ -17,11 +17,131 @@ from core.models import DATE_FMT, ItemRecord, MoneyRecord
 from scoring.scoring import ScoreResult, score_item
 
 
+def _section_label(text: str) -> QtWidgets.QLabel:
+    label = QtWidgets.QLabel(text)
+    label.setObjectName("SectionTitle")
+    return label
+
+
+def _build_style_sheet(theme: dict) -> str:
+    accent = theme.get("accent", "#2563eb")
+    accent_hover = "#1d4ed8"
+    muted = theme.get("muted", "#94a3b8")
+    background = theme.get("background", "#f7f9fb")
+    foreground = theme.get("foreground", "#0f172a")
+    table = theme.get("table", {}) or {}
+    header_bg = table.get("header_bg", "#e2e8f0")
+    header_fg = table.get("header_fg", foreground)
+    row_bg = table.get("row_bg", "#ffffff")
+    alt_row_bg = table.get("alt_row_bg", "#f1f5f9")
+    return f"""
+    QWidget {{
+        background-color: {background};
+        color: {foreground};
+        font: 14px "Segoe UI", "Inter", sans-serif;
+    }}
+    QTabWidget::pane {{
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 8px;
+        margin-top: 6px;
+    }}
+    QTabBar::tab {{
+        background: transparent;
+        padding: 10px 16px;
+        border: none;
+        border-bottom: 2px solid transparent;
+        margin-right: 6px;
+        font-weight: 600;
+    }}
+    QTabBar::tab:selected {{
+        color: {accent};
+        border-bottom: 2px solid {accent};
+    }}
+    QLabel#SectionTitle {{
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        color: {muted};
+        padding: 2px 0 4px;
+    }}
+    QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QDateTimeEdit {{
+        background: #ffffff;
+        border: 1px solid #d7dde5;
+        border-radius: 8px;
+        padding: 8px 10px;
+        min-height: 32px;
+    }}
+    QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateTimeEdit:focus {{
+        border-color: {accent};
+        outline: none;
+    }}
+    QComboBox QAbstractItemView {{
+        selection-background-color: {accent};
+        selection-color: #ffffff;
+        padding: 6px;
+    }}
+    QPushButton {{
+        background-color: {accent};
+        color: #ffffff;
+        border: 1px solid {accent};
+        border-radius: 10px;
+        padding: 8px 14px;
+        font-weight: 600;
+    }}
+    QPushButton:hover {{
+        background-color: {accent_hover};
+        border-color: {accent_hover};
+    }}
+    QPushButton:disabled {{
+        background: #e5e7eb;
+        border-color: #e5e7eb;
+        color: #9ca3af;
+    }}
+    QTableWidget {{
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        gridline-color: #e2e8f0;
+        background: {row_bg};
+        alternate-background-color: {alt_row_bg};
+        selection-background-color: {accent};
+        selection-color: #ffffff;
+    }}
+    QTableWidget::item {{
+        padding: 10px 12px;
+    }}
+    QTableWidget::item:selected {{
+        background-color: {accent};
+        color: #ffffff;
+    }}
+    QHeaderView::section {{
+        background: {header_bg};
+        color: {header_fg};
+        padding: 10px 14px;
+        border: none;
+        border-bottom: 1px solid #d7dde5;
+    }}
+    QScrollBar:vertical {{
+        width: 12px;
+        background: transparent;
+    }}
+    QScrollBar::handle:vertical {{
+        background: #cbd5e1;
+        border-radius: 6px;
+    }}
+    QScrollBar::handle:vertical:hover {{
+        background: #94a3b8;
+    }}
+    """
+
+
 def launch() -> None:
     _detach_console_on_windows()
     app = QtWidgets.QApplication(sys.argv)
     config = ConfigManager()
     ensure_paths(config.settings)
+    theme = config.get_theme()
+    app.setStyleSheet(_build_style_sheet(theme))
     window = MainWindow(config)
     window.show()
     sys.exit(app.exec())
@@ -53,7 +173,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.settings_tab, "Settings")
         container = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(container)
-        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(16)
         layout.addWidget(self.tabs)
         self.setCentralWidget(container)
 
@@ -166,10 +287,13 @@ class PurchasesWidget(QtWidgets.QWidget):
 
     def _build_ui(self) -> None:
         layout = QtWidgets.QVBoxLayout(self)
-        layout.setSpacing(8)
+        layout.setSpacing(12)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.addWidget(_section_label("Purchases"))
 
         controls = QtWidgets.QHBoxLayout()
         controls.setSpacing(6)
+        controls.setContentsMargins(0, 0, 0, 0)
         self.search_edit = QtWidgets.QLineEdit()
         self.search_edit.setPlaceholderText("Search")
         self.search_edit.textChanged.connect(self.refresh)
@@ -199,7 +323,14 @@ class PurchasesWidget(QtWidgets.QWidget):
         self.table = QtWidgets.QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(["Product", "Date", "Cost", "Urgency", "Overall"])
         self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.horizontalHeader().setDefaultAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+        self.table.horizontalHeader().setHighlightSections(False)
+        self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setDefaultSectionSize(38)
+        self.table.setAlternatingRowColors(True)
+        self.table.setShowGrid(False)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.table.doubleClicked.connect(self.edit_item)
         layout.addWidget(self.table)
@@ -245,7 +376,10 @@ class PurchasesWidget(QtWidgets.QWidget):
                 f"{(item.overall_score or 0):.2f}",
             ]
             for col, val in enumerate(values):
-                self.table.setItem(row, col, QtWidgets.QTableWidgetItem(val))
+                cell = QtWidgets.QTableWidgetItem(val)
+                if col == 0:
+                    cell.setData(QtCore.Qt.ItemDataRole.UserRole, item.id)
+                self.table.setItem(row, col, cell)
             total += item.cost
             if item.overall_score is not None:
                 scored += 1
@@ -333,10 +467,13 @@ class MoneyWidget(QtWidgets.QWidget):
 
     def _build_ui(self) -> None:
         layout = QtWidgets.QVBoxLayout(self)
-        layout.setSpacing(8)
+        layout.setSpacing(12)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.addWidget(_section_label("Money"))
 
         controls = QtWidgets.QHBoxLayout()
         controls.setSpacing(6)
+        controls.setContentsMargins(0, 0, 0, 0)
         self.search_edit = QtWidgets.QLineEdit()
         self.search_edit.setPlaceholderText("Search")
         self.search_edit.textChanged.connect(self.refresh)
@@ -365,7 +502,14 @@ class MoneyWidget(QtWidgets.QWidget):
         self.table = QtWidgets.QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(["Date", "Type", "Source/Destination", "Amount", "Linked Item"])
         self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.horizontalHeader().setDefaultAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+        self.table.horizontalHeader().setHighlightSections(False)
+        self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setDefaultSectionSize(38)
+        self.table.setAlternatingRowColors(True)
+        self.table.setShowGrid(False)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.table.doubleClicked.connect(self.edit_entry)
         layout.addWidget(self.table)
@@ -421,7 +565,10 @@ class MoneyWidget(QtWidgets.QWidget):
                 entry.linked_item_id,
             ]
             for col, val in enumerate(values):
-                self.table.setItem(row, col, QtWidgets.QTableWidgetItem(val))
+                cell = QtWidgets.QTableWidgetItem(val)
+                if col == 0:
+                    cell.setData(QtCore.Qt.ItemDataRole.UserRole, entry.id)
+                self.table.setItem(row, col, cell)
         balance = income - expense
         self.income_label.setText(f"Income: {self.main.currency_symbol}{income:.2f}")
         self.expense_label.setText(f"Expenses: {self.main.currency_symbol}{expense:.2f}")
@@ -499,6 +646,10 @@ class SettingsWidget(QtWidgets.QWidget):
     def _build_ui(self) -> None:
         layout = QtWidgets.QFormLayout(self)
         layout.setLabelAlignment(QtCore.Qt.AlignLeft)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
+        layout.setFieldGrowthPolicy(QtWidgets.QFormLayout.AllNonFixedFieldsGrow)
+        layout.addRow(_section_label("Preferences"))
         self.autosave_check = QtWidgets.QCheckBox("Enable autosave")
         self.autosave_check.setChecked(self.main.settings["ui"].get("autosave", True))
         self.autosave_check.stateChanged.connect(self._toggle_autosave)
@@ -570,14 +721,19 @@ class ItemDialog(QtWidgets.QDialog):
             self._load(existing)
 
     def _build_ui(self) -> None:
-        layout = QtWidgets.QFormLayout(self)
-        layout.setSpacing(8)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setSpacing(12)
+        layout.setContentsMargins(18, 18, 18, 18)
 
+        layout.addWidget(_section_label("Item Details"))
+        info_form = QtWidgets.QFormLayout()
+        info_form.setLabelAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        info_form.setSpacing(10)
+        info_form.setFieldGrowthPolicy(QtWidgets.QFormLayout.AllNonFixedFieldsGrow)
         self.date_edit = QtWidgets.QDateTimeEdit(QtCore.QDateTime.currentDateTime())
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDisplayFormat("yyyy-MM-dd HH:mm")
-        layout.addRow("Date", self.date_edit)
+        self.date_edit.setMinimumWidth(280)
 
         self.product = QtWidgets.QLineEdit()
         self.description = QtWidgets.QLineEdit()
@@ -597,23 +753,50 @@ class ItemDialog(QtWidgets.QDialog):
         self.justification = QtWidgets.QLineEdit()
         self.recurrence = QtWidgets.QComboBox()
         self.recurrence.addItems(["none", "once", "weekly", "biweekly", "monthly", "quarterly", "yearly"])
+        field_width = 320
+        for widget in [
+            self.product,
+            self.description,
+            self.location,
+            self.reference,
+            self.cost,
+            self.urgency,
+            self.value,
+            self.price_comp,
+            self.effect,
+            self.justification,
+            self.recurrence,
+        ]:
+            widget.setMinimumWidth(field_width)
 
-        layout.addRow("Product", self.product)
-        layout.addRow("Description", self.description)
-        layout.addRow("Location", self.location)
-        layout.addRow("Reference", self.reference)
-        layout.addRow("Cost", self.cost)
-        layout.addRow("Urgency", self.urgency)
-        layout.addRow("Value", self.value)
-        layout.addRow("Price vs Similar", self.price_comp)
-        layout.addRow("Effect", self.effect)
-        layout.addRow("Justification", self.justification)
-        layout.addRow("Recurrence", self.recurrence)
+        info_form.addRow("Date", self.date_edit)
+        info_form.addRow("Product", self.product)
+        info_form.addRow("Description", self.description)
+        info_form.addRow("Location", self.location)
+        info_form.addRow("Reference", self.reference)
+        layout.addLayout(info_form)
+
+        layout.addWidget(_section_label("Scoring & Recurrence"))
+        score_form = QtWidgets.QFormLayout()
+        score_form.setLabelAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        score_form.setSpacing(10)
+        score_form.setFieldGrowthPolicy(QtWidgets.QFormLayout.AllNonFixedFieldsGrow)
+        score_form.addRow("Cost", self.cost)
+        score_form.addRow("Urgency", self.urgency)
+        score_form.addRow("Value", self.value)
+        score_form.addRow("Price vs Similar", self.price_comp)
+        score_form.addRow("Effect", self.effect)
+        score_form.addRow("Justification", self.justification)
+        score_form.addRow("Recurrence", self.recurrence)
+        layout.addLayout(score_form)
 
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Save | QtWidgets.QDialogButtonBox.Cancel)
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
-        layout.addRow(buttons)
+        btn_row = QtWidgets.QHBoxLayout()
+        btn_row.addStretch()
+        btn_row.addWidget(buttons)
+        layout.addLayout(btn_row)
 
     def _load(self, item: ItemRecord) -> None:
         self.date_edit.setDateTime(QtCore.QDateTime.fromString(item.date.strftime("%Y-%m-%d %H:%M"), "yyyy-MM-dd HH:mm"))
@@ -670,14 +853,19 @@ class MoneyDialog(QtWidgets.QDialog):
             self._load(existing)
 
     def _build_ui(self) -> None:
-        layout = QtWidgets.QFormLayout(self)
-        layout.setSpacing(8)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setSpacing(12)
+        layout.setContentsMargins(18, 18, 18, 18)
 
+        layout.addWidget(_section_label("Money Entry"))
+        info_form = QtWidgets.QFormLayout()
+        info_form.setLabelAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        info_form.setSpacing(10)
+        info_form.setFieldGrowthPolicy(QtWidgets.QFormLayout.AllNonFixedFieldsGrow)
         self.date_edit = QtWidgets.QDateTimeEdit(QtCore.QDateTime.currentDateTime())
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDisplayFormat("yyyy-MM-dd HH:mm")
-        layout.addRow("Date", self.date_edit)
+        self.date_edit.setMinimumWidth(280)
 
         self.type_box = QtWidgets.QComboBox()
         self.type_box.addItems(["income", "expense"])
@@ -691,16 +879,31 @@ class MoneyDialog(QtWidgets.QDialog):
         for item in self.items:
             self.link_combo.addItem(f"{item.product} ({item.id})", item.id)
 
-        layout.addRow("Type", self.type_box)
-        layout.addRow("Source/Destination", self.source)
-        layout.addRow("Amount", self.amount)
-        layout.addRow("Notes", self.notes)
-        layout.addRow("Linked Item", self.link_combo)
+        for widget in [self.type_box, self.source, self.amount, self.notes, self.link_combo]:
+            widget.setMinimumWidth(320)
+
+        info_form.addRow("Date", self.date_edit)
+        info_form.addRow("Type", self.type_box)
+        info_form.addRow("Source/Destination", self.source)
+        info_form.addRow("Amount", self.amount)
+        layout.addLayout(info_form)
+
+        layout.addWidget(_section_label("Notes & Linking"))
+        extras_form = QtWidgets.QFormLayout()
+        extras_form.setLabelAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        extras_form.setSpacing(10)
+        extras_form.setFieldGrowthPolicy(QtWidgets.QFormLayout.AllNonFixedFieldsGrow)
+        extras_form.addRow("Notes", self.notes)
+        extras_form.addRow("Linked Item", self.link_combo)
+        layout.addLayout(extras_form)
 
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Save | QtWidgets.QDialogButtonBox.Cancel)
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
-        layout.addRow(buttons)
+        btn_row = QtWidgets.QHBoxLayout()
+        btn_row.addStretch()
+        btn_row.addWidget(buttons)
+        layout.addLayout(btn_row)
 
     def _load(self, entry: MoneyRecord) -> None:
         self.date_edit.setDateTime(QtCore.QDateTime.fromString(entry.date.strftime("%Y-%m-%d %H:%M"), "yyyy-MM-dd HH:mm"))
