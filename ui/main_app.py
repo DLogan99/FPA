@@ -57,6 +57,7 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.addWidget(self.tabs)
         self.setCentralWidget(container)
+        self.setMinimumSize(960, 640)
 
         self._load_data()
         self._setup_shortcuts()
@@ -177,6 +178,8 @@ class PurchasesWidget(QtWidgets.QWidget):
         self.filter_combo = QtWidgets.QComboBox()
         self.filter_combo.addItems(["All", "High (>4)", "Low (<2.5)"])
         self.filter_combo.currentIndexChanged.connect(self.refresh)
+        clear_btn = QtWidgets.QPushButton("Clear Filters")
+        clear_btn.clicked.connect(self._clear_filters)
 
         for text, handler in [
             ("Add Item", self.add_item),
@@ -195,11 +198,15 @@ class PurchasesWidget(QtWidgets.QWidget):
         controls.addWidget(QtWidgets.QLabel("Filter"))
         controls.addWidget(self.filter_combo)
         controls.addWidget(self.search_edit)
+        controls.addWidget(clear_btn)
         layout.addLayout(controls)
 
         self.table = QtWidgets.QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(["Product", "Date", "Cost", "Urgency", "Overall"])
         self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.setAlternatingRowColors(True)
+        self.table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.table.doubleClicked.connect(self.edit_item)
@@ -261,8 +268,6 @@ class PurchasesWidget(QtWidgets.QWidget):
         if not rows:
             return None
         row = rows[0].row()
-        item_id = self.table.item(row, 0).data(QtCore.Qt.ItemDataRole.UserRole)
-        # store id in hidden? easier: match by displayed product? Instead map using sorted order:
         filtered = self._filtered_items()
         if row < len(filtered):
             return filtered[row]
@@ -321,9 +326,13 @@ class PurchasesWidget(QtWidgets.QWidget):
             return
         try:
             write_items(path, self._filtered_items())
-            QtWidgets.QMessageBox.information(self, "Export", "Items exported.")
+        QtWidgets.QMessageBox.information(self, "Export", "Items exported.")
         except Exception as exc:
             QtWidgets.QMessageBox.critical(self, "Export failed", str(exc))
+
+    def _clear_filters(self) -> None:
+        self.search_edit.clear()
+        self.filter_combo.setCurrentIndex(0)
 
 
 class MoneyWidget(QtWidgets.QWidget):
@@ -344,6 +353,8 @@ class MoneyWidget(QtWidgets.QWidget):
         self.type_filter = QtWidgets.QComboBox()
         self.type_filter.addItems(["All", "Income", "Expense"])
         self.type_filter.currentIndexChanged.connect(self.refresh)
+        clear_btn = QtWidgets.QPushButton("Clear Filters")
+        clear_btn.clicked.connect(self._clear_filters)
 
         for text, handler in [
             ("Add Entry", self.add_entry),
@@ -361,11 +372,15 @@ class MoneyWidget(QtWidgets.QWidget):
         controls.addWidget(QtWidgets.QLabel("Type"))
         controls.addWidget(self.type_filter)
         controls.addWidget(self.search_edit)
+        controls.addWidget(clear_btn)
         layout.addLayout(controls)
 
         self.table = QtWidgets.QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(["Date", "Type", "Source/Destination", "Amount", "Linked Item"])
         self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.setAlternatingRowColors(True)
+        self.table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.table.doubleClicked.connect(self.edit_entry)
@@ -414,12 +429,13 @@ class MoneyWidget(QtWidgets.QWidget):
                 income += entry.amount
             elif entry.entry_type.lower() == "expense":
                 expense += entry.amount
+            linked_display = id_to_product.get(entry.linked_item_id, entry.linked_item_id)
             values = [
                 entry.date.strftime(self.main.date_fmt),
                 entry.entry_type.title(),
                 entry.source_or_destination,
                 f"{self.main.currency_symbol}{entry.amount:.2f}",
-                entry.linked_item_id,
+                linked_display,
             ]
             for col, val in enumerate(values):
                 self.table.setItem(row, col, QtWidgets.QTableWidgetItem(val))
@@ -489,6 +505,10 @@ class MoneyWidget(QtWidgets.QWidget):
             QtWidgets.QMessageBox.information(self, "Export", "Money entries exported.")
         except Exception as exc:
             QtWidgets.QMessageBox.critical(self, "Export failed", str(exc))
+
+    def _clear_filters(self) -> None:
+        self.search_edit.clear()
+        self.type_filter.setCurrentIndex(0)
 
 
 class SettingsWidget(QtWidgets.QWidget):
