@@ -1021,16 +1021,13 @@ class ItemDialog(QtWidgets.QDialog):
         self.cost = QtWidgets.QDoubleSpinBox()
         self.cost.setMaximum(1_000_000)
         self.cost.setPrefix(self.main.currency_symbol)
-        self.urgency = QtWidgets.QSpinBox()
-        self.urgency.setRange(1, 5)
-        self.value = QtWidgets.QSpinBox()
-        self.value.setRange(1, 5)
-        self.price_comp = QtWidgets.QSpinBox()
-        self.price_comp.setRange(1, 5)
-        self.effect = QtWidgets.QSpinBox()
-        self.effect.setRange(1, 5)
+        self.urgency = self._create_rating_combo()
+        self.value = self._create_rating_combo()
+        self.price_comp = self._create_rating_combo()
+        self.effect = self._create_rating_combo()
         self.justification = QtWidgets.QLineEdit()
         self.recurrence = QtWidgets.QComboBox()
+        self.recurrence.setFocusPolicy(QtCore.Qt.StrongFocus)
         self.recurrence.addItems(["none", "once", "weekly", "biweekly", "monthly", "quarterly", "yearly"])
 
         layout.addRow("Product", self.product)
@@ -1050,6 +1047,36 @@ class ItemDialog(QtWidgets.QDialog):
         buttons.rejected.connect(self.reject)
         layout.addRow(buttons)
 
+        self._set_tab_order(buttons)
+
+    def _create_rating_combo(self) -> QtWidgets.QComboBox:
+        combo = QtWidgets.QComboBox()
+        combo.addItems([str(i) for i in range(1, 6)])
+        combo.setFocusPolicy(QtCore.Qt.StrongFocus)
+        combo.setInsertPolicy(QtWidgets.QComboBox.NoInsert)
+        return combo
+
+    def _set_tab_order(self, buttons: QtWidgets.QDialogButtonBox) -> None:
+        self.setTabOrder(self.date_edit, self.product)
+        self.setTabOrder(self.product, self.description)
+        self.setTabOrder(self.description, self.location)
+        self.setTabOrder(self.location, self.reference)
+        self.setTabOrder(self.reference, self.cost)
+        self.setTabOrder(self.cost, self.urgency)
+        self.setTabOrder(self.urgency, self.value)
+        self.setTabOrder(self.value, self.price_comp)
+        self.setTabOrder(self.price_comp, self.effect)
+        self.setTabOrder(self.effect, self.justification)
+        self.setTabOrder(self.justification, self.recurrence)
+        save_btn = buttons.button(QtWidgets.QDialogButtonBox.Save)
+        cancel_btn = buttons.button(QtWidgets.QDialogButtonBox.Cancel)
+        if save_btn:
+            self.setTabOrder(self.recurrence, save_btn)
+            if cancel_btn:
+                self.setTabOrder(save_btn, cancel_btn)
+        elif cancel_btn:
+            self.setTabOrder(self.recurrence, cancel_btn)
+
     def _load(self, item: ItemRecord) -> None:
         self.date_edit.setDateTime(QtCore.QDateTime.fromString(item.date.strftime("%Y-%m-%d %H:%M"), "yyyy-MM-dd HH:mm"))
         self.product.setText(item.product)
@@ -1057,15 +1084,21 @@ class ItemDialog(QtWidgets.QDialog):
         self.location.setText(item.location)
         self.reference.setText(item.reference)
         self.cost.setValue(item.cost)
-        self.urgency.setValue(item.urgency)
-        self.value.setValue(item.value)
-        self.price_comp.setValue(item.price_comp)
-        self.effect.setValue(item.effect)
+        self._set_rating_selection(self.urgency, item.urgency)
+        self._set_rating_selection(self.value, item.value)
+        self._set_rating_selection(self.price_comp, item.price_comp)
+        self._set_rating_selection(self.effect, item.effect)
         self.justification.setText(item.justification)
         if item.recurrence:
             idx = self.recurrence.findText(item.recurrence)
             if idx >= 0:
                 self.recurrence.setCurrentIndex(idx)
+
+    def _set_rating_selection(self, combo: QtWidgets.QComboBox, value: int) -> None:
+        text = str(int(value))
+        idx = combo.findText(text)
+        if idx >= 0:
+            combo.setCurrentIndex(idx)
 
     def _save(self) -> None:
         try:
@@ -1081,10 +1114,10 @@ class ItemDialog(QtWidgets.QDialog):
             location=self.location.text(),
             reference=self.reference.text(),
             cost=float(self.cost.value()),
-            urgency=int(self.urgency.value()),
-            value=int(self.value.value()),
-            price_comp=int(self.price_comp.value()),
-            effect=int(self.effect.value()),
+            urgency=int(self.urgency.currentText()),
+            value=int(self.value.currentText()),
+            price_comp=int(self.price_comp.currentText()),
+            effect=int(self.effect.currentText()),
             justification=self.justification.text(),
             recurrence=self.recurrence.currentText(),
         )
