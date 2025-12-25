@@ -41,5 +41,20 @@ pyinstaller app.py --onefile --name finance_planner --add-data "config;config"
 
 Binaries will appear under `dist/` (`finance_planner` on Linux/macOS, `finance_planner.exe` on Windows).
 
+## Windows installer helper
+
+Build the binary with PyInstaller as above, then run the installer helper:
+
+```bash
+python -m installer.main
+```
+
+Options:
+- `--install-dir PATH` (default: `%LOCALAPPDATA%\FinancePlanner`)
+- `--no-start-menu` to skip the Start Menu shortcut
+- `--desktop` to add a Desktop shortcut
+- `--taskbar` to attempt pinning to the taskbar (may require elevation)
+- `--uninstall` to remove installed files and shortcuts (user data under `%APPDATA%\finance_planner` is preserved)
+
 ## CI artifacts
 GitHub Actions workflow `.github/workflows/build.yml` builds standalone binaries for Linux and Windows using PyInstaller and uploads them as artifacts on each push/PR.
