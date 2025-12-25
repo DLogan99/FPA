@@ -1,9 +1,12 @@
+import csv
 import json
 import os
 import shutil
 import sys
 from copy import deepcopy
 from typing import Any, Dict, List, Optional, Tuple
+
+from core.models import ItemRecord, MoneyRecord
 
 
 class ConfigManager:
@@ -359,3 +362,45 @@ def ensure_paths(settings: Dict[str, Any]) -> None:
         path = paths.get(key)
         if path:
             os.makedirs(os.path.dirname(path) if key != "backup_dir" else path, exist_ok=True)
+
+
+def ensure_startup_files(config: "ConfigManager") -> None:
+    """Create all files the application expects at startup if they are missing."""
+    _ensure_json_if_missing(config.settings_path, config.settings)
+    _ensure_text_if_missing(config.weights_path, config._weights_template(config.weights))
+    _ensure_json_if_missing(config.themes_path, config.themes)
+
+    paths = config.settings.get("paths", {})
+    _ensure_csv_if_missing(paths.get("items_csv"), ItemRecord.headers())
+    _ensure_csv_if_missing(paths.get("money_csv"), MoneyRecord.headers())
+    backup_dir = paths.get("backup_dir")
+    if backup_dir:
+        os.makedirs(backup_dir, exist_ok=True)
+
+
+def _ensure_json_if_missing(path: Optional[str], payload: Dict[str, Any]) -> None:
+    if not path:
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if not os.path.exists(path):
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2)
+
+
+def _ensure_text_if_missing(path: Optional[str], contents: str) -> None:
+    if not path:
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if not os.path.exists(path):
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(contents)
+
+
+def _ensure_csv_if_missing(path: Optional[str], headers: List[str]) -> None:
+    if not path:
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if not os.path.exists(path):
+        with open(path, "w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=headers)
+            writer.writeheader()
