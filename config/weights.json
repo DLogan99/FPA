@@ -4,6 +4,7 @@
     "cost": 1.0,
     "urgency": 1.0,
     "value": 1.0,
+    "want": 1.0,
     "price_comp": 1.0,
     "effect": 1.0
   },

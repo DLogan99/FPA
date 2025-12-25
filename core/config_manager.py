@@ -91,11 +91,12 @@ class ConfigManager:
             "weights": {
                 "date": 1.0,
                 "cost": 1.0,
-                "urgency": 1.0,
-                "value": 1.0,
-                "price_comp": 1.0,
-                "effect": 1.0,
-            },
+            "urgency": 1.0,
+            "value": 1.0,
+            "want": 1.0,
+            "price_comp": 1.0,
+            "effect": 1.0,
+        },
             "date_scoring": {"recent_days": 7, "mid_days": 30},
             "cost_bands": [
                 {"max": 50, "score": 5},
@@ -151,17 +152,9 @@ class ConfigManager:
                 "autosave": True,
             },
         )
-        self.weights.setdefault(
-            "weights",
-            {
-                "date": 1.0,
-                "cost": 1.0,
-                "urgency": 1.0,
-                "value": 1.0,
-                "price_comp": 1.0,
-                "effect": 1.0,
-            },
-        )
+        self.weights.setdefault("weights", {})
+        for key in ["date", "cost", "urgency", "value", "want", "price_comp", "effect"]:
+            self.weights["weights"].setdefault(key, 1.0)
         self.weights.setdefault("date_scoring", {"recent_days": 7, "mid_days": 30})
         self.weights.setdefault(
             "cost_bands",

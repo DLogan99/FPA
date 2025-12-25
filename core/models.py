@@ -17,6 +17,7 @@ class ItemRecord:
     cost: float
     urgency: int
     value: int
+    want: int
     price_comp: int
     effect: int
     justification: str
@@ -35,6 +36,7 @@ class ItemRecord:
             "cost",
             "urgency",
             "value",
+            "want",
             "price_comp",
             "effect",
             "justification",
@@ -54,6 +56,7 @@ class ItemRecord:
             cost=float(row.get("cost", "0") or 0),
             urgency=int(row.get("urgency", "1") or 1),
             value=int(row.get("value", "1") or 1),
+            want=int(row.get("want", "3") or 3),
             price_comp=int(row.get("price_comp", "1") or 1),
             effect=int(row.get("effect", "1") or 1),
             justification=row.get("justification", ""),
@@ -72,6 +75,7 @@ class ItemRecord:
             "cost": f"{self.cost:.2f}",
             "urgency": str(self.urgency),
             "value": str(self.value),
+            "want": str(self.want),
             "price_comp": str(self.price_comp),
             "effect": str(self.effect),
             "justification": self.justification,

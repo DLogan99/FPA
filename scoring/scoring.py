@@ -53,6 +53,7 @@ def score_item(item: ItemRecord, weights_config: Dict) -> ScoreResult:
         "cost": _score_cost(item.cost, cost_bands),
         "urgency": float(item.urgency),
         "value": float(item.value),
+        "want": float(item.want),
         "price_comp": float(item.price_comp),
         "effect": float(item.effect),
     }
