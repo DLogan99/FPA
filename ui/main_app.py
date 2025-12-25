@@ -1016,7 +1016,13 @@ class ItemDialog(QtWidgets.QDialog):
 
         self.product = QtWidgets.QLineEdit()
         self.description = QtWidgets.QLineEdit()
-        self.location = QtWidgets.QLineEdit()
+        self.location_combo = QtWidgets.QComboBox()
+        self.location_options = ["Online", "Brick and Mortar", "Second-hand", "Gift", "Other"]
+        self.location_combo.addItems(self.location_options)
+        self.location_other = QtWidgets.QLineEdit()
+        self.location_other.setPlaceholderText("Specify location")
+        self.location_other.setEnabled(False)
+        self.location_combo.currentTextChanged.connect(self._location_changed)
         self.reference = QtWidgets.QLineEdit()
         self.cost = QtWidgets.QDoubleSpinBox()
         self.cost.setMaximum(1_000_000)
@@ -1032,7 +1038,14 @@ class ItemDialog(QtWidgets.QDialog):
 
         layout.addRow("Product", self.product)
         layout.addRow("Description", self.description)
-        layout.addRow("Location", self.location)
+        location_row = QtWidgets.QHBoxLayout()
+        location_row.setContentsMargins(0, 0, 0, 0)
+        location_row.setSpacing(6)
+        location_row.addWidget(self.location_combo)
+        location_row.addWidget(self.location_other)
+        location_container = QtWidgets.QWidget()
+        location_container.setLayout(location_row)
+        layout.addRow("Location", location_container)
         layout.addRow("Reference", self.reference)
         layout.addRow("Cost", self.cost)
         layout.addRow("Urgency", self.urgency)
@@ -1081,7 +1094,17 @@ class ItemDialog(QtWidgets.QDialog):
         self.date_edit.setDateTime(QtCore.QDateTime.fromString(item.date.strftime("%Y-%m-%d %H:%M"), "yyyy-MM-dd HH:mm"))
         self.product.setText(item.product)
         self.description.setText(item.description)
-        self.location.setText(item.location)
+        if item.location in self.location_options:
+            idx = self.location_combo.findText(item.location)
+            if idx >= 0:
+                self.location_combo.setCurrentIndex(idx)
+            self.location_other.clear()
+        else:
+            other_idx = self.location_combo.findText("Other")
+            if other_idx >= 0:
+                self.location_combo.setCurrentIndex(other_idx)
+            self.location_other.setText(item.location)
+            self.location_other.setEnabled(True)
         self.reference.setText(item.reference)
         self.cost.setValue(item.cost)
         self._set_rating_selection(self.urgency, item.urgency)
@@ -1106,12 +1129,17 @@ class ItemDialog(QtWidgets.QDialog):
         except Exception:
             QtWidgets.QMessageBox.warning(self, "Invalid", "Invalid date.")
             return
+        location_choice = self.location_combo.currentText()
+        if location_choice == "Other":
+            location_value = self.location_other.text().strip() or "Other"
+        else:
+            location_value = location_choice
         record = ItemRecord(
             id=self.existing.id if self.existing else str(QtCore.QUuid.createUuid()).strip("{}"),
             date=date,
             product=self.product.text(),
             description=self.description.text(),
-            location=self.location.text(),
+            location=location_value,
             reference=self.reference.text(),
             cost=float(self.cost.value()),
             urgency=int(self.urgency.currentText()),
@@ -1123,6 +1151,9 @@ class ItemDialog(QtWidgets.QDialog):
         )
         self.result_record = record
         self.accept()
+
+    def _location_changed(self, text: str) -> None:
+        self.location_other.setEnabled(text == "Other")
 
 
 class MoneyDialog(QtWidgets.QDialog):
