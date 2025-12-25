@@ -145,25 +145,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.save_items(trigger_backup=self.settings["ui"].get("autosave", True))
 
     def view_item(self, record: ItemRecord) -> None:
-        msg = QtWidgets.QMessageBox(self)
-        msg.setWindowTitle("Item Details")
-        msg.setIcon(QtWidgets.QMessageBox.Information)
-        details = [
-            f"Product: {record.product}",
-            f"Date: {record.date.strftime(self.date_fmt)}",
-            f"Cost: {self.currency_symbol}{record.cost:.2f}",
-            f"Urgency: {record.urgency}",
-            f"Value: {record.value}",
-            f"Price vs Similar: {record.price_comp}",
-            f"Effect: {record.effect}",
-            f"Justification: {record.justification}",
-            f"Reference: {record.reference}",
-            f"Location: {record.location}",
-            f"Recurrence: {record.recurrence}",
-            f"Overall Score: {(record.overall_score or 0):.2f}",
-        ]
-        msg.setText("\n".join(details))
-        msg.exec()
+        dialog = ItemViewDialog(self, record, self.date_fmt, self.currency_symbol)
+        dialog.exec()
 
     def add_or_edit_money(self, existing: Optional[MoneyRecord] = None) -> None:
         dialog = MoneyDialog(self, existing, self.items)
@@ -175,6 +158,134 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.money.append(record)
             self._sort_money()
             self.save_money(trigger_backup=self.settings["ui"].get("autosave", True))
+
+
+class ItemViewDialog(QtWidgets.QDialog):
+    def __init__(self, parent: MainWindow, record: ItemRecord, date_fmt: str, currency_symbol: str) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Item Details")
+        self.setMinimumWidth(520)
+        self._build_ui(record, date_fmt, currency_symbol)
+
+    def _build_ui(self, record: ItemRecord, date_fmt: str, currency_symbol: str) -> None:
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(14)
+
+        header = QtWidgets.QHBoxLayout()
+        header.setSpacing(10)
+        icon_label = QtWidgets.QLabel()
+        icon = self.style().standardIcon(QtWidgets.QStyle.SP_FileDialogInfoView)
+        icon_label.setPixmap(icon.pixmap(32, 32))
+        header.addWidget(icon_label)
+
+        title = QtWidgets.QLabel(record.product or "Item")
+        title_font = title.font()
+        title_font.setPointSize(title_font.pointSize() + 2)
+        title_font.setBold(True)
+        title.setFont(title_font)
+        header.addWidget(title)
+        header.addStretch()
+        layout.addLayout(header)
+
+        details_section, details_layout = self._section_container(
+            "Details", QtWidgets.QStyle.SP_FileDialogDetailedView
+        )
+        details_form = QtWidgets.QFormLayout()
+        details_form.setLabelAlignment(QtCore.Qt.AlignRight)
+        details_form.setFormAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
+        details_form.setHorizontalSpacing(14)
+        details_form.setVerticalSpacing(8)
+
+        def add_detail(label: str, widget: QtWidgets.QWidget) -> None:
+            details_form.addRow(self._section_label(label), widget)
+
+        add_detail("Date", self._readonly_field(record.date.strftime(date_fmt)))
+        add_detail("Cost", self._readonly_field(f"{currency_symbol}{record.cost:,.2f}"))
+        add_detail("Location", self._readonly_field(record.location))
+        add_detail("Recurrence", self._readonly_field(record.recurrence))
+        add_detail("Reference", self._readonly_field(record.reference, multiline=True))
+
+        details_layout.addLayout(details_form)
+
+        eval_section, eval_layout = self._section_container("Evaluation", QtWidgets.QStyle.SP_DialogApplyButton)
+        eval_form = QtWidgets.QFormLayout()
+        eval_form.setLabelAlignment(QtCore.Qt.AlignRight)
+        eval_form.setFormAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
+        eval_form.setHorizontalSpacing(14)
+        eval_form.setVerticalSpacing(8)
+
+        def add_eval(label: str, widget: QtWidgets.QWidget) -> None:
+            eval_form.addRow(self._section_label(label), widget)
+
+        add_eval("Urgency", self._readonly_field(str(record.urgency)))
+        add_eval("Value", self._readonly_field(str(record.value)))
+        add_eval("Price vs Similar", self._readonly_field(str(record.price_comp)))
+        add_eval("Effect", self._readonly_field(str(record.effect)))
+        add_eval("Overall Score", self._readonly_field(f"{(record.overall_score or 0):.2f}"))
+        add_eval("Description", self._readonly_field(record.description, multiline=True))
+        add_eval("Justification", self._readonly_field(record.justification, multiline=True))
+
+        eval_layout.addLayout(eval_form)
+
+        layout.addWidget(details_section)
+        layout.addWidget(eval_section)
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        close_btn = buttons.button(QtWidgets.QDialogButtonBox.Close)
+        if close_btn:
+            close_btn.setDefault(True)
+        layout.addWidget(buttons)
+
+    def _section_container(
+        self, title: str, icon_type: QtWidgets.QStyle.StandardPixmap
+    ) -> tuple[QtWidgets.QGroupBox, QtWidgets.QVBoxLayout]:
+        box = QtWidgets.QGroupBox()
+        box_layout = QtWidgets.QVBoxLayout(box)
+        box_layout.setContentsMargins(10, 10, 10, 10)
+        box_layout.setSpacing(8)
+
+        header = QtWidgets.QHBoxLayout()
+        header.setSpacing(6)
+        icon_label = QtWidgets.QLabel()
+        icon = self.style().standardIcon(icon_type)
+        icon_label.setPixmap(icon.pixmap(20, 20))
+        header.addWidget(icon_label)
+
+        label = QtWidgets.QLabel(title)
+        label_font = label.font()
+        label_font.setBold(True)
+        label.setFont(label_font)
+        header.addWidget(label)
+        header.addStretch()
+        box_layout.addLayout(header)
+        return box, box_layout
+
+    def _readonly_field(self, text: str, multiline: bool = False) -> QtWidgets.QWidget:
+        if multiline:
+            widget: QtWidgets.QPlainTextEdit = QtWidgets.QPlainTextEdit()
+            widget.setPlainText(text)
+            widget.setReadOnly(True)
+            widget.setFrameStyle(QtWidgets.QFrame.Panel | QtWidgets.QFrame.Sunken)
+            widget.setBackgroundVisible(False)
+            widget.setWordWrapMode(QtGui.QTextOption.WrapAtWordBoundaryOrAnywhere)
+            widget.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+            widget.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
+            widget.setMinimumHeight(64)
+            return widget
+        line_edit = QtWidgets.QLineEdit(text)
+        line_edit.setReadOnly(True)
+        line_edit.setFrame(True)
+        return line_edit
+
+    def _section_label(self, text: str) -> QtWidgets.QLabel:
+        label = QtWidgets.QLabel(text)
+        font = label.font()
+        font.setBold(True)
+        label.setFont(font)
+        return label
 
 
 class PurchasesWidget(QtWidgets.QWidget):
