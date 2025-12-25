@@ -10,7 +10,7 @@ from typing import List, Optional
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from core.backup import create_backup
-from core.config_manager import ConfigManager, ensure_paths
+from core.config_manager import ConfigManager, ensure_paths, ensure_startup_files
 from core.csv_storage import read_bundle, read_items, read_money, write_bundle, write_items, write_money
 from core.models import DATE_FMT, ItemRecord, MoneyRecord
 from scoring.scoring import ScoreResult, score_item
@@ -29,6 +29,7 @@ def launch() -> None:
     app = QtWidgets.QApplication(sys.argv)
     config = ConfigManager()
     ensure_paths(config.settings)
+    ensure_startup_files(config)
     window = MainWindow(config)
     window.show()
     sys.exit(app.exec())
