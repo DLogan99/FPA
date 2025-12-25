@@ -290,6 +290,64 @@ class ConfigManager:
         self.weights.setdefault("weights", {})
         for key in ["date", "cost", "urgency", "value", "want", "price_comp", "effect"]:
             self.weights["weights"].setdefault(key, 1.0)
+        changed = False
+
+        if not paths.get("items_csv"):
+            paths["items_csv"] = os.path.join(self.user_root, "data", "items.csv")
+            changed = True
+        if not paths.get("money_csv"):
+            paths["money_csv"] = os.path.join(self.user_root, "data", "money.csv")
+            changed = True
+        if not paths.get("backup_dir"):
+            paths["backup_dir"] = os.path.join(self.user_root, "backups")
+            changed = True
+
+        backup_defaults = {
+            "keep_recent": 3,
+            "keep_historical": 3,
+        }
+        if "backup" not in self.settings:
+            self.settings["backup"] = dict(backup_defaults)
+            changed = True
+        else:
+            for key, value in backup_defaults.items():
+                if key not in self.settings["backup"]:
+                    self.settings["backup"][key] = value
+                    changed = True
+
+        if "themes" not in self.settings:
+            self.settings["themes"] = {"default": "light"}
+            changed = True
+        else:
+            if "default" not in self.settings["themes"]:
+                self.settings["themes"]["default"] = "light"
+                changed = True
+
+        ui_defaults = {
+            "date_format": "%Y-%m-%d %H:%M",
+            "currency_symbol": "$",
+            "autosave": True,
+        }
+        if "ui" not in self.settings:
+            self.settings["ui"] = dict(ui_defaults)
+            changed = True
+        else:
+            for key, value in ui_defaults.items():
+                if key not in self.settings["ui"]:
+                    self.settings["ui"][key] = value
+                    changed = True
+
+        self.weights.setdefault(
+            "weights",
+            {
+                "date": 1.0,
+                "cost": 1.0,
+                "urgency": 1.0,
+                "value": 1.0,
+                "price_comp": 1.0,
+                "effect": 1.0,
+            },
+        )
         self.weights.setdefault("date_scoring", {"recent_days": 7, "mid_days": 30})
         self.weights.setdefault(
             "cost_bands",
@@ -310,6 +368,9 @@ class ConfigManager:
             table.setdefault("header_fg", theme.get("foreground", "#000000"))
             table.setdefault("row_bg", theme.get("background", "#ffffff"))
             table.setdefault("alt_row_bg", theme.get("background", "#ffffff"))
+
+        if changed:
+            self.save_settings()
 
     def save_settings(self) -> None:
         os.makedirs(os.path.dirname(self.settings_path), exist_ok=True)
