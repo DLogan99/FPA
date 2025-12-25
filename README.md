@@ -1,6 +1,6 @@
 # Finance Planner (Python)
 
-Local-first finance planner built with Tkinter. Data is stored in CSV files with configurable JSON settings, weights, and themes. Defaults are bundled and copied to your OS data directory on first run (e.g., `%APPDATA%/finance_planner` on Windows or `~/.local/share/finance_planner` on Linux).
+Local-first finance planner built with Tkinter. Data is stored in CSV files with configurable JSON settings and themes plus a plain-text weights file. Defaults are bundled and copied to your OS data directory on first run (e.g., `%APPDATA%/finance_planner` on Windows or `~/.local/share/finance_planner` on Linux).
 
 ## Features
 - Purchases/Items: add, edit, view, delete, import/export CSV, search/filter, and score via configurable weights with total spend, average score, and item counts.
@@ -13,6 +13,7 @@ Local-first finance planner built with Tkinter. Data is stored in CSV files with
 - Settings: update currency formatting, date display, theme, and backup retention.
 - Backups: timestamped copies with retention (3 recent + 3 historical by default).
 - Config and themes are user-writable JSON in the data directory; defaults are auto-created on first run.
+- Weights: edit `weights.txt` (key=value lines) and restart the app to apply changes.
 
 ## Install / Run
 Install dependencies (PySide6 for the Qt UI) then run:
@@ -24,7 +25,7 @@ python app.py
 
 ## Data locations
 - Config: `<data_dir>/settings.json`
-- Weights: `<data_dir>/weights.json`
+- Weights: `<data_dir>/weights.txt`
 - Themes: `<data_dir>/themes.json`
 - Items: `<data_dir>/data/items.csv`
 - Money: `<data_dir>/data/money.csv`

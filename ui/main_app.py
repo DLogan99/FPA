@@ -67,6 +67,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._load_data()
         self._setup_shortcuts()
+        self._show_config_messages()
 
     def _setup_shortcuts(self) -> None:
         QtGui.QShortcut(QtGui.QKeySequence("Ctrl+F"), self, self._focus_search)
@@ -99,6 +100,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.money = read_money(self.money_path)
         self._sort_items()
         self._sort_money()
+        self._rescore_items()
         self.purchases_tab.refresh()
         self.money_tab.refresh()
 
@@ -111,13 +113,6 @@ class MainWindow(QtWidgets.QMainWindow):
     def _rescore_items(self) -> None:
         for item in self.items:
             item.overall_score = score_item(item, self.weights).overall
-
-    def apply_weights(self, weights_cfg: dict) -> None:
-        self.weights = weights_cfg
-        self.config_manager.weights = weights_cfg
-        self.config_manager.save_weights()
-        self._rescore_items()
-        self.save_items(trigger_backup=False)
 
     def save_items(self, trigger_backup: bool = True) -> None:
         write_items(self.items_path, self.items)
@@ -143,6 +138,15 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.items.append(record)
             self._sort_items()
             self.save_items(trigger_backup=self.settings["ui"].get("autosave", True))
+
+    def _show_config_messages(self) -> None:
+        restart_note = "Edit weights in weights.txt and restart the app to apply changes."
+        if self.config_manager.load_messages:
+            messages = list(self.config_manager.load_messages)
+            messages.append(restart_note)
+            QtWidgets.QMessageBox.warning(self, "Configuration", "\n".join(messages))
+        else:
+            print(restart_note)
 
     def view_item(self, record: ItemRecord) -> None:
         dialog = ItemViewDialog(self, record, self.date_fmt, self.currency_symbol)
@@ -901,10 +905,14 @@ class SettingsWidget(QtWidgets.QWidget):
         self._add_path_row(layout, "Money file", self.main.money_path)
         self._add_path_row(layout, "Backups", self.main.backup_dir)
         self._add_path_row(layout, "Config (settings.json)", self.main.config_manager.settings_path)
-        self._add_path_row(layout, "Weights (weights.json)", self.main.config_manager.weights_path)
+        self._add_path_row(layout, "Weights (weights.txt)", self.main.config_manager.weights_path)
         self._add_path_row(layout, "Themes (themes.json)", self.main.config_manager.themes_path)
 
-        self._add_weights_group(layout)
+        info_label = QtWidgets.QLabel(
+            "Weights are read-only at runtime. Edit weights.txt in the config folder and restart to apply changes."
+        )
+        info_label.setWordWrap(True)
+        layout.addRow("Weights", info_label)
 
     def _toggle_autosave(self, state: int) -> None:
         self.main.settings["ui"]["autosave"] = bool(state)
@@ -956,41 +964,6 @@ class SettingsWidget(QtWidgets.QWidget):
         row.addWidget(entry)
         row.addWidget(copy_btn)
         layout.addRow(label, row)
-
-    def _add_weights_group(self, layout: QtWidgets.QFormLayout) -> None:
-        group = QtWidgets.QGroupBox("Weights (admin)")
-        g_layout = QtWidgets.QFormLayout(group)
-        g_layout.setLabelAlignment(QtCore.Qt.AlignLeft)
-        self.weight_spins = {}
-        labels = [
-            ("Date", "date"),
-            ("Cost", "cost"),
-            ("Urgency", "urgency"),
-            ("Value", "value"),
-            ("Price vs Similar", "price_comp"),
-            ("Effect", "effect"),
-        ]
-        weights = self.main.weights.get("weights", {})
-        for label, key in labels:
-            spin = QtWidgets.QDoubleSpinBox()
-            spin.setRange(0.0, 10.0)
-            spin.setSingleStep(0.1)
-            spin.setValue(float(weights.get(key, 1.0)))
-            spin.setSuffix("×")
-            g_layout.addRow(f"{label} weight", spin)
-            self.weight_spins[key] = spin
-        save_btn = QtWidgets.QPushButton("Save weights")
-        save_btn.clicked.connect(self._save_weights)
-        g_layout.addRow(save_btn)
-        layout.addRow(group)
-
-    def _save_weights(self) -> None:
-        weights_cfg = self.main.weights
-        weights_cfg.setdefault("weights", {})
-        for key, spin in self.weight_spins.items():
-            weights_cfg["weights"][key] = spin.value()
-        self.main.apply_weights(weights_cfg)
-        QtWidgets.QMessageBox.information(self, "Weights", "Weights saved and applied.")
 
 
 class ItemDialog(QtWidgets.QDialog):

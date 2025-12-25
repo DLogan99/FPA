@@ -1,0 +1,26 @@
+# Purchase scoring weights
+# Edit values and restart the app to apply changes.
+
+weight_date=1.0
+weight_cost=1.0
+weight_urgency=1.0
+weight_value=1.0
+weight_price_comp=1.0
+weight_effect=1.0
+
+date_recent_days=7
+date_mid_days=30
+
+# Cost bands: ascending maximum (use 'none' for no upper bound)
+cost_band1_max=50
+cost_band1_score=5
+cost_band2_max=150
+cost_band2_score=4
+cost_band3_max=400
+cost_band3_score=3
+cost_band4_max=800
+cost_band4_score=2
+cost_band5_max=none
+cost_band5_score=1
+
+urgency_override=5
