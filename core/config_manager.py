@@ -2,7 +2,8 @@ import json
 import os
 import shutil
 import sys
-from typing import Any, Dict, Optional
+from copy import deepcopy
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class ConfigManager:
@@ -11,13 +12,14 @@ class ConfigManager:
     def __init__(
         self,
         settings_path: str = "config/settings.json",
-        weights_path: str = "config/weights.json",
+        weights_path: str = "config/weights.txt",
         themes_path: str = "config/themes.json",
         base_dir: Optional[str] = None,
     ) -> None:
         self.bundle_dir = getattr(sys, "_MEIPASS", os.getcwd())
         self.base_dir = os.path.abspath(base_dir or self.bundle_dir)
         self.user_root = self._user_data_root()
+        self.load_messages: List[str] = []
         self.settings_path = self._user_path(settings_path)
         self.weights_path = self._user_path(weights_path)
         self.themes_path = self._user_path(themes_path)
@@ -26,11 +28,12 @@ class ConfigManager:
             default=self._default_settings(),
             packaged_name=settings_path,
         )
-        self.weights = self._load_json(
+        self.weights, weights_messages = self._load_weights_text(
             self.weights_path,
             default=self._default_weights(),
             packaged_name=weights_path,
         )
+        self.load_messages.extend(weights_messages)
         self.themes = self._load_json(
             self.themes_path,
             default=self._default_themes(),
@@ -64,6 +67,135 @@ class ConfigManager:
                 return dict(default)
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
+
+    def _load_weights_text(
+        self, path: str, default: Dict[str, Any], packaged_name: Optional[str] = None
+    ) -> Tuple[Dict[str, Any], List[str]]:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        warnings: List[str] = []
+        created = False
+        if not os.path.exists(path):
+            if packaged_name:
+                packaged_path = os.path.join(self.bundle_dir, packaged_name)
+                if os.path.exists(packaged_path):
+                    shutil.copy2(packaged_path, path)
+            if not os.path.exists(path):
+                created = True
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(self._weights_template(default))
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                contents = f.readlines()
+            weights, parse_warnings = self._parse_weights_lines(contents, default)
+            warnings.extend(parse_warnings)
+            if created:
+                warnings.append(f"Weights file not found. A default template was created at {path}.")
+            return weights, warnings
+        except Exception as exc:  # pragma: no cover - defensive
+            warnings.append(f"Failed to load weights from {path}: {exc}. Using defaults.")
+            return dict(default), warnings
+
+    def _parse_weights_lines(self, lines: List[str], default: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
+        config = deepcopy(default)
+        warnings: List[str] = []
+        weight_keys = {
+            "weight_date": "date",
+            "weight_cost": "cost",
+            "weight_urgency": "urgency",
+            "weight_value": "value",
+            "weight_price_comp": "price_comp",
+            "weight_effect": "effect",
+        }
+        for idx, raw in enumerate(lines, start=1):
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                warnings.append(f"Line {idx}: missing '=' separator; ignored.")
+                continue
+            key, value = (part.strip() for part in line.split("=", 1))
+            if key in weight_keys:
+                try:
+                    config["weights"][weight_keys[key]] = float(value)
+                except ValueError:
+                    warnings.append(f"Line {idx}: invalid weight for {key}; using default.")
+                continue
+            if key == "date_recent_days":
+                try:
+                    config.setdefault("date_scoring", {})["recent_days"] = int(value)
+                except ValueError:
+                    warnings.append(f"Line {idx}: invalid integer for date_recent_days; using default.")
+                continue
+            if key == "date_mid_days":
+                try:
+                    config.setdefault("date_scoring", {})["mid_days"] = int(value)
+                except ValueError:
+                    warnings.append(f"Line {idx}: invalid integer for date_mid_days; using default.")
+                continue
+            if key.startswith("cost_band"):
+                parts = key.split("_")
+                if len(parts) == 3 and parts[2] in {"max", "score"}:
+                    band_name = parts[0]
+                    band_idx = band_name.replace("cost_band", "")
+                    try:
+                        band_num = int(band_idx)
+                    except ValueError:
+                        warnings.append(f"Line {idx}: invalid band index in {key}; ignored.")
+                        continue
+                    while len(config.setdefault("cost_bands", [])) < band_num:
+                        config["cost_bands"].append({"max": None, "score": 1})
+                    band = config["cost_bands"][band_num - 1]
+                    if parts[2] == "max":
+                        if value.lower() in {"none", ""}:
+                            band["max"] = None
+                        else:
+                            try:
+                                band["max"] = float(value)
+                            except ValueError:
+                                warnings.append(f"Line {idx}: invalid max for {key}; using default.")
+                    else:
+                        try:
+                            band["score"] = float(value)
+                        except ValueError:
+                            warnings.append(f"Line {idx}: invalid score for {key}; using default.")
+                    continue
+            if key == "urgency_override":
+                try:
+                    config["urgency_override"] = int(value)
+                except ValueError:
+                    warnings.append(f"Line {idx}: invalid integer for urgency_override; using default.")
+                continue
+            warnings.append(f"Line {idx}: unknown key '{key}'; ignored.")
+        return config, warnings
+
+    def _weights_template(self, config: Dict[str, Any]) -> str:
+        weights = config.get("weights", {})
+        date_scoring = config.get("date_scoring", {})
+        bands = config.get("cost_bands", [])
+        lines = [
+            "# Purchase scoring weights",
+            "# Edit values and restart the app to apply changes.",
+            "",
+            f"weight_date={weights.get('date', 1.0)}",
+            f"weight_cost={weights.get('cost', 1.0)}",
+            f"weight_urgency={weights.get('urgency', 1.0)}",
+            f"weight_value={weights.get('value', 1.0)}",
+            f"weight_price_comp={weights.get('price_comp', 1.0)}",
+            f"weight_effect={weights.get('effect', 1.0)}",
+            "",
+            f"date_recent_days={date_scoring.get('recent_days', 7)}",
+            f"date_mid_days={date_scoring.get('mid_days', 30)}",
+            "",
+            "# Cost bands: ascending maximum (use 'none' for no upper bound)",
+        ]
+        for idx, band in enumerate(bands, start=1):
+            max_val = band.get("max")
+            max_str = "none" if max_val is None else max_val
+            lines.append(f"cost_band{idx}_max={max_str}")
+            lines.append(f"cost_band{idx}_score={band.get('score', 1)}")
+        lines.append("")
+        lines.append(f"urgency_override={config.get('urgency_override', 5)}")
+        return "\n".join(str(line) for line in lines)
 
     @staticmethod
     def _default_settings() -> Dict[str, Any]:
@@ -192,11 +324,6 @@ class ConfigManager:
         os.makedirs(os.path.dirname(self.themes_path), exist_ok=True)
         with open(self.themes_path, "w", encoding="utf-8") as f:
             json.dump(self.themes, f, indent=2)
-
-    def save_weights(self) -> None:
-        os.makedirs(os.path.dirname(self.weights_path), exist_ok=True)
-        with open(self.weights_path, "w", encoding="utf-8") as f:
-            json.dump(self.weights, f, indent=2)
 
     def get_theme(self, name: Optional[str] = None) -> Dict[str, Any]:
         theme_name = name or self.settings.get("themes", {}).get("default", "light")
