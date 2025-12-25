@@ -1204,11 +1204,33 @@ if __name__ == "__main__":
 
 
 def _detach_console_on_windows() -> None:
-    if sys.platform.startswith("win") and hasattr(ctypes, "windll"):
+    if not sys.platform.startswith("win") or not hasattr(ctypes, "windll"):
+        return
+
+    try:
+        kernel32 = ctypes.windll.kernel32
+        user32 = getattr(ctypes.windll, "user32", None)
+        get_console_window = getattr(kernel32, "GetConsoleWindow", None)
+        if get_console_window is None:
+            return
+
+        hwnd = get_console_window()
+        if not hwnd:
+            return
+
+        if user32 is not None:
+            try:
+                SW_HIDE = 0
+                user32.ShowWindow(hwnd, SW_HIDE)
+            except Exception:
+                pass
+
         try:
-            ctypes.windll.kernel32.FreeConsole()
+            kernel32.FreeConsole()
         except Exception:
             pass
+    except Exception:
+        pass
 
 
 def _redirect_stdio_to_null_on_windows() -> None:
