@@ -22,6 +22,8 @@ pip install PySide6
 python app.py
 ```
 
+On Windows, prefer `pythonw.exe app.py` to avoid launching a console window when running the app directly.
+
 ## Data locations
 - Config: `<data_dir>/settings.json`
 - Weights: `<data_dir>/weights.json`
@@ -33,17 +35,17 @@ python app.py
 ## Building standalone binaries (PyInstaller)
 ```bash
 # Linux/macOS
-pyinstaller app.py --onefile --name finance_planner --add-data "config:config"
+pyinstaller app.py --onefile --windowed --noconsole --name finance_planner --add-data "config:config"
 
 # Windows (note the path separator)
-pyinstaller app.py --onefile --name finance_planner --add-data "config;config"
+pyinstaller app.py --onefile --windowed --noconsole --name finance_planner --add-data "config;config"
 ```
 
 Binaries will appear under `dist/` (`finance_planner` on Linux/macOS, `finance_planner.exe` on Windows).
 
 ## Windows installer helper
 
-Build the binary with PyInstaller as above, then run the installer helper:
+Build the binary with PyInstaller as above (including `--noconsole`) to ensure the packaged app runs without a console window, then run the installer helper:
 
 ```bash
 python -m installer.main
