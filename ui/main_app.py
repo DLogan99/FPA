@@ -47,6 +47,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.backup_dir = self.settings["paths"]["backup_dir"]
         self.date_fmt = self.settings["ui"]["date_format"]
         self.currency_symbol = self.settings["ui"]["currency_symbol"]
+        self.item_sort_column, self.item_sort_ascending = self._load_sort_state(
+            "items_sort", default_column=1, default_direction="desc"
+        )
+        self.money_sort_column, self.money_sort_ascending = self._load_sort_state(
+            "money_sort", default_column=0, default_direction="desc"
+        )
 
         self.items: List[ItemRecord] = []
         self.money: List[MoneyRecord] = []
@@ -67,6 +73,30 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._load_data()
         self._setup_shortcuts()
+
+    def _load_sort_state(self, key: str, default_column: int, default_direction: str) -> tuple[int, bool]:
+        ui_settings = self.settings.setdefault("ui", {})
+        sort_cfg = ui_settings.get(key, {})
+        changed = False
+        if not isinstance(sort_cfg, dict):
+            sort_cfg = {}
+            ui_settings[key] = sort_cfg
+            changed = True
+        column = int(sort_cfg.get("column", default_column))
+        direction = sort_cfg.get("direction", default_direction)
+        if "column" not in sort_cfg:
+            sort_cfg["column"] = column
+            changed = True
+        if "direction" not in sort_cfg:
+            sort_cfg["direction"] = direction
+            changed = True
+        if changed:
+            self.config_manager.save_settings()
+        return column, direction == "asc"
+
+    def _persist_sort_state(self, key: str, column: int, ascending: bool) -> None:
+        self.settings["ui"][key] = {"column": column, "direction": "asc" if ascending else "desc"}
+        self.config_manager.save_settings()
 
     def _setup_shortcuts(self) -> None:
         QtGui.QShortcut(QtGui.QKeySequence("Ctrl+F"), self, self._focus_search)
@@ -103,10 +133,48 @@ class MainWindow(QtWidgets.QMainWindow):
         self.money_tab.refresh()
 
     def _sort_items(self) -> None:
-        self.items.sort(key=lambda i: i.date, reverse=True)
+        col = self.item_sort_column
+        asc = self.item_sort_ascending
+        if col == 0:
+            self.items.sort(key=lambda i: i.product.lower(), reverse=not asc)
+        elif col == 1:
+            self.items.sort(key=lambda i: i.date, reverse=not asc)
+        elif col == 2:
+            self.items.sort(key=lambda i: i.cost, reverse=not asc)
+        elif col == 3:
+            self.items.sort(key=lambda i: i.urgency, reverse=not asc)
+        elif col == 4:
+            self.items.sort(
+                key=lambda i: (
+                    i.overall_score is None,
+                    (i.overall_score or 0.0) if asc else -(i.overall_score or 0.0),
+                )
+            )
+        else:
+            self.items.sort(key=lambda i: i.date, reverse=True)
+            self.item_sort_column = 1
+            self.item_sort_ascending = False
 
     def _sort_money(self) -> None:
-        self.money.sort(key=lambda m: m.date, reverse=True)
+        col = self.money_sort_column
+        asc = self.money_sort_ascending
+        linked_names = {item.id: item.product for item in self.items}
+        if col == 0:
+            self.money.sort(key=lambda m: m.date, reverse=not asc)
+        elif col == 1:
+            self.money.sort(key=lambda m: m.entry_type.lower(), reverse=not asc)
+        elif col == 2:
+            self.money.sort(key=lambda m: m.source_or_destination.lower(), reverse=not asc)
+        elif col == 3:
+            self.money.sort(key=lambda m: m.amount, reverse=not asc)
+        elif col == 4:
+            self.money.sort(
+                key=lambda m: linked_names.get(m.linked_item_id, m.linked_item_id).lower(), reverse=not asc
+            )
+        else:
+            self.money.sort(key=lambda m: m.date, reverse=True)
+            self.money_sort_column = 0
+            self.money_sort_ascending = False
 
     def _rescore_items(self) -> None:
         for item in self.items:
@@ -338,6 +406,10 @@ class PurchasesWidget(QtWidgets.QWidget):
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.table.doubleClicked.connect(self.edit_item)
+        header = self.table.horizontalHeader()
+        header.setSortIndicatorShown(True)
+        header.sectionClicked.connect(self._handle_sort)
+        self.table.setSortingEnabled(True)
         layout.addWidget(self.table)
 
         summary = QtWidgets.QHBoxLayout()
@@ -368,6 +440,7 @@ class PurchasesWidget(QtWidgets.QWidget):
 
     def refresh(self) -> None:
         items = self._filtered_items()
+        self.table.setSortingEnabled(False)
         self.table.setRowCount(len(items))
         total = 0.0
         score_sum = 0.0
@@ -386,6 +459,9 @@ class PurchasesWidget(QtWidgets.QWidget):
             if item.overall_score is not None:
                 scored += 1
                 score_sum += item.overall_score
+        self.table.setSortingEnabled(True)
+        sort_order = QtCore.Qt.AscendingOrder if self.main.item_sort_ascending else QtCore.Qt.DescendingOrder
+        self.table.horizontalHeader().setSortIndicator(self.main.item_sort_column, sort_order)
         avg = score_sum / scored if scored else 0.0
         self.total_label.setText(f"Total: {self.main.currency_symbol}{total:.2f}")
         self.avg_label.setText(f"Average: {avg:.2f}")
@@ -578,6 +654,16 @@ class PurchasesWidget(QtWidgets.QWidget):
         self.search_edit.clear()
         self.filter_combo.setCurrentIndex(0)
 
+    def _handle_sort(self, column: int) -> None:
+        if column == self.main.item_sort_column:
+            self.main.item_sort_ascending = not self.main.item_sort_ascending
+        else:
+            self.main.item_sort_column = column
+            self.main.item_sort_ascending = True
+        self.main._persist_sort_state("items_sort", self.main.item_sort_column, self.main.item_sort_ascending)
+        self.main._sort_items()
+        self.refresh()
+
 
 class MoneyWidget(QtWidgets.QWidget):
     def __init__(self, main: MainWindow) -> None:
@@ -628,6 +714,10 @@ class MoneyWidget(QtWidgets.QWidget):
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.table.doubleClicked.connect(self.edit_entry)
+        header = self.table.horizontalHeader()
+        header.setSortIndicatorShown(True)
+        header.sectionClicked.connect(self._handle_sort)
+        self.table.setSortingEnabled(True)
         layout.addWidget(self.table)
 
         summary = QtWidgets.QHBoxLayout()
@@ -666,6 +756,7 @@ class MoneyWidget(QtWidgets.QWidget):
     def refresh(self) -> None:
         id_to_product = {item.id: item.product for item in self.main.items}
         entries = self._filtered_entries()
+        self.table.setSortingEnabled(False)
         self.table.setRowCount(len(entries))
         income = 0.0
         expense = 0.0
@@ -684,6 +775,9 @@ class MoneyWidget(QtWidgets.QWidget):
             ]
             for col, val in enumerate(values):
                 self.table.setItem(row, col, QtWidgets.QTableWidgetItem(val))
+        self.table.setSortingEnabled(True)
+        sort_order = QtCore.Qt.AscendingOrder if self.main.money_sort_ascending else QtCore.Qt.DescendingOrder
+        self.table.horizontalHeader().setSortIndicator(self.main.money_sort_column, sort_order)
         balance = income - expense
         self.income_label.setText(f"Income: {self.main.currency_symbol}{income:.2f}")
         self.expense_label.setText(f"Expenses: {self.main.currency_symbol}{expense:.2f}")
@@ -869,6 +963,16 @@ class MoneyWidget(QtWidgets.QWidget):
     def _clear_filters(self) -> None:
         self.search_edit.clear()
         self.type_filter.setCurrentIndex(0)
+
+    def _handle_sort(self, column: int) -> None:
+        if column == self.main.money_sort_column:
+            self.main.money_sort_ascending = not self.main.money_sort_ascending
+        else:
+            self.main.money_sort_column = column
+            self.main.money_sort_ascending = True
+        self.main._persist_sort_state("money_sort", self.main.money_sort_column, self.main.money_sort_ascending)
+        self.main._sort_money()
+        self.refresh()
 
 
 class SettingsWidget(QtWidgets.QWidget):
