@@ -4,7 +4,6 @@ import ctypes
 import os
 import subprocess
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
@@ -12,9 +11,16 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from core.backup import create_backup
 from core.config_manager import ConfigManager, ensure_paths
-from core.csv_storage import read_items, read_money, write_items, write_money
+from core.csv_storage import read_bundle, read_items, read_money, write_bundle, write_items, write_money
 from core.models import DATE_FMT, ItemRecord, MoneyRecord
 from scoring.scoring import ScoreResult, score_item
+
+
+def _merge_by_id(existing, imported):
+    merged = {record.id: record for record in existing}
+    for record in imported:
+        merged[record.id] = record
+    return list(merged.values())
 
 
 def launch() -> None:
@@ -197,8 +203,8 @@ class PurchasesWidget(QtWidgets.QWidget):
             ("Edit", self.edit_item),
             ("View", self.view_item),
             ("Delete", self.delete_item),
-            ("Import CSV", self.import_csv),
-            ("Export CSV", self.export_csv),
+            ("Import", self.import_data),
+            ("Export", self.export_data),
             ("Refresh", self.refresh),
         ]:
             btn = QtWidgets.QPushButton(text)
@@ -305,7 +311,43 @@ class PurchasesWidget(QtWidgets.QWidget):
             self.main.items = [i for i in self.main.items if i.id != record.id]
             self.main.save_items(trigger_backup=self.main.settings["ui"].get("autosave", True))
 
-    def import_csv(self) -> None:
+    def import_data(self) -> None:
+        choice, ok = QtWidgets.QInputDialog.getItem(
+            self,
+            "Import",
+            "Select data type to import:",
+            ["Items (CSV)", "Money (CSV)", "Bundle (JSON)"],
+            0,
+            False,
+        )
+        if not ok:
+            return
+        if choice.startswith("Items"):
+            self._import_items_csv()
+        elif choice.startswith("Money"):
+            self._import_money_csv()
+        else:
+            self._import_bundle()
+
+    def export_data(self) -> None:
+        choice, ok = QtWidgets.QInputDialog.getItem(
+            self,
+            "Export",
+            "Select data to export:",
+            ["Items (CSV)", "Money (CSV)", "Bundle (JSON)"],
+            0,
+            False,
+        )
+        if not ok:
+            return
+        if choice.startswith("Items"):
+            self._export_items_csv()
+        elif choice.startswith("Money"):
+            self._export_money_csv()
+        else:
+            self._export_bundle()
+
+    def _import_items_csv(self) -> None:
         path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select items CSV", filter="CSV Files (*.csv)")
         if not path:
             return
@@ -323,15 +365,12 @@ class PurchasesWidget(QtWidgets.QWidget):
         if choice == QtWidgets.QMessageBox.Yes:
             self.main.items = imported
         else:
-            merged = {i.id: i for i in self.main.items}
-            for i in imported:
-                merged[i.id] = i
-            self.main.items = list(merged.values())
+            self.main.items = _merge_by_id(self.main.items, imported)
         self.main._sort_items()
         self.main.save_items(trigger_backup=self.main.settings["ui"].get("autosave", True))
         QtWidgets.QMessageBox.information(self, "Import", "Items imported.")
 
-    def export_csv(self) -> None:
+    def _export_items_csv(self) -> None:
         path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save items CSV", filter="CSV Files (*.csv)")
         if not path:
             return
@@ -341,6 +380,88 @@ class PurchasesWidget(QtWidgets.QWidget):
             QtWidgets.QMessageBox.critical(self, "Export failed", str(exc))
         else:
             QtWidgets.QMessageBox.information(self, "Export", "Items exported.")
+
+    def _import_money_csv(self) -> None:
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select money CSV", filter="CSV Files (*.csv)")
+        if not path:
+            return
+        try:
+            imported = read_money(path)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Import failed", str(exc))
+            return
+        choice = QtWidgets.QMessageBox.question(
+            self,
+            "Import Money",
+            "Replace existing money entries with imported data?\nYes = replace, No = append.",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        )
+        if choice == QtWidgets.QMessageBox.Yes:
+            self.main.money = imported
+        else:
+            self.main.money = _merge_by_id(self.main.money, imported)
+        self.main._sort_money()
+        self.main.save_money(trigger_backup=self.main.settings["ui"].get("autosave", True))
+        QtWidgets.QMessageBox.information(self, "Import", "Money entries imported.")
+
+    def _export_money_csv(self) -> None:
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save money CSV", filter="CSV Files (*.csv)")
+        if not path:
+            return
+        try:
+            write_money(path, self.main.money)
+            QtWidgets.QMessageBox.information(self, "Export", "Money entries exported.")
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Export failed", str(exc))
+
+    def _import_bundle(self) -> None:
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select bundle", filter="Bundle Files (*.json)")
+        if not path:
+            return
+        try:
+            items, money, metadata = read_bundle(path)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Import failed", f"Could not read bundle:\n{exc}")
+            return
+        details = metadata.get("generated_at", "unknown time") if isinstance(metadata, dict) else "unknown time"
+        choice = QtWidgets.QMessageBox.question(
+            self,
+            "Import Bundle",
+            (
+                f"Bundle contains {len(items)} items and {len(money)} money entries "
+                f"(created {details}).\n\n"
+                "Yes = overwrite current items and money with bundle contents.\n"
+                "No = append/merge; incoming records replace matching IDs and new IDs are added."
+            ),
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        )
+        if choice == QtWidgets.QMessageBox.Yes:
+            self.main.items = items
+            self.main.money = money
+        else:
+            self.main.items = _merge_by_id(self.main.items, items)
+            self.main.money = _merge_by_id(self.main.money, money)
+        self.main._sort_items()
+        self.main._sort_money()
+        autosave = self.main.settings["ui"].get("autosave", True)
+        self.main.save_items(trigger_backup=autosave)
+        self.main.save_money(trigger_backup=autosave)
+        QtWidgets.QMessageBox.information(self, "Import", "Bundle imported.")
+
+    def _export_bundle(self) -> None:
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save bundle", filter="Bundle Files (*.json)")
+        if not path:
+            return
+        try:
+            write_bundle(path, self.main.items, self.main.money)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Export failed", f"Could not write bundle:\n{exc}")
+        else:
+            QtWidgets.QMessageBox.information(
+                self,
+                "Export",
+                f"Bundle exported with {len(self.main.items)} items and {len(self.main.money)} money entries.",
+            )
 
     def _clear_filters(self) -> None:
         self.search_edit.clear()
@@ -372,8 +493,8 @@ class MoneyWidget(QtWidgets.QWidget):
             ("Add Entry", self.add_entry),
             ("Edit", self.edit_entry),
             ("Delete", self.delete_entry),
-            ("Import CSV", self.import_csv),
-            ("Export CSV", self.export_csv),
+            ("Import", self.import_data),
+            ("Export", self.export_data),
             ("Refresh", self.refresh),
         ]:
             btn = QtWidgets.QPushButton(text)
@@ -483,7 +604,43 @@ class MoneyWidget(QtWidgets.QWidget):
             self.main.money = [m for m in self.main.money if m.id != record.id]
             self.main.save_money(trigger_backup=self.main.settings["ui"].get("autosave", True))
 
-    def import_csv(self) -> None:
+    def import_data(self) -> None:
+        choice, ok = QtWidgets.QInputDialog.getItem(
+            self,
+            "Import",
+            "Select data type to import:",
+            ["Money (CSV)", "Items (CSV)", "Bundle (JSON)"],
+            0,
+            False,
+        )
+        if not ok:
+            return
+        if choice.startswith("Money"):
+            self._import_money_csv()
+        elif choice.startswith("Items"):
+            self._import_items_csv()
+        else:
+            self._import_bundle()
+
+    def export_data(self) -> None:
+        choice, ok = QtWidgets.QInputDialog.getItem(
+            self,
+            "Export",
+            "Select data to export:",
+            ["Money (CSV)", "Items (CSV)", "Bundle (JSON)"],
+            0,
+            False,
+        )
+        if not ok:
+            return
+        if choice.startswith("Money"):
+            self._export_money_csv()
+        elif choice.startswith("Items"):
+            self._export_items_csv()
+        else:
+            self._export_bundle()
+
+    def _import_money_csv(self) -> None:
         path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select money CSV", filter="CSV Files (*.csv)")
         if not path:
             return
@@ -501,15 +658,12 @@ class MoneyWidget(QtWidgets.QWidget):
         if choice == QtWidgets.QMessageBox.Yes:
             self.main.money = imported
         else:
-            merged = {m.id: m for m in self.main.money}
-            for m in imported:
-                merged[m.id] = m
-            self.main.money = list(merged.values())
+            self.main.money = _merge_by_id(self.main.money, imported)
         self.main._sort_money()
         self.main.save_money(trigger_backup=self.main.settings["ui"].get("autosave", True))
         QtWidgets.QMessageBox.information(self, "Import", "Money entries imported.")
 
-    def export_csv(self) -> None:
+    def _export_money_csv(self) -> None:
         path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save money CSV", filter="CSV Files (*.csv)")
         if not path:
             return
@@ -518,6 +672,88 @@ class MoneyWidget(QtWidgets.QWidget):
             QtWidgets.QMessageBox.information(self, "Export", "Money entries exported.")
         except Exception as exc:
             QtWidgets.QMessageBox.critical(self, "Export failed", str(exc))
+
+    def _import_items_csv(self) -> None:
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select items CSV", filter="CSV Files (*.csv)")
+        if not path:
+            return
+        try:
+            imported = read_items(path)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Import failed", str(exc))
+            return
+        choice = QtWidgets.QMessageBox.question(
+            self,
+            "Import Items",
+            "Replace existing items with imported data?\nYes = replace, No = append.",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        )
+        if choice == QtWidgets.QMessageBox.Yes:
+            self.main.items = imported
+        else:
+            self.main.items = _merge_by_id(self.main.items, imported)
+        self.main._sort_items()
+        self.main.save_items(trigger_backup=self.main.settings["ui"].get("autosave", True))
+        QtWidgets.QMessageBox.information(self, "Import", "Items imported.")
+
+    def _export_items_csv(self) -> None:
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save items CSV", filter="CSV Files (*.csv)")
+        if not path:
+            return
+        try:
+            write_items(path, self.main.items)
+            QtWidgets.QMessageBox.information(self, "Export", "Items exported.")
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Export failed", str(exc))
+
+    def _import_bundle(self) -> None:
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select bundle", filter="Bundle Files (*.json)")
+        if not path:
+            return
+        try:
+            items, money, metadata = read_bundle(path)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Import failed", f"Could not read bundle:\n{exc}")
+            return
+        details = metadata.get("generated_at", "unknown time") if isinstance(metadata, dict) else "unknown time"
+        choice = QtWidgets.QMessageBox.question(
+            self,
+            "Import Bundle",
+            (
+                f"Bundle contains {len(items)} items and {len(money)} money entries "
+                f"(created {details}).\n\n"
+                "Yes = overwrite current items and money with bundle contents.\n"
+                "No = append/merge; incoming records replace matching IDs and new IDs are added."
+            ),
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        )
+        if choice == QtWidgets.QMessageBox.Yes:
+            self.main.items = items
+            self.main.money = money
+        else:
+            self.main.items = _merge_by_id(self.main.items, items)
+            self.main.money = _merge_by_id(self.main.money, money)
+        self.main._sort_items()
+        self.main._sort_money()
+        autosave = self.main.settings["ui"].get("autosave", True)
+        self.main.save_items(trigger_backup=autosave)
+        self.main.save_money(trigger_backup=autosave)
+        QtWidgets.QMessageBox.information(self, "Import", "Bundle imported.")
+
+    def _export_bundle(self) -> None:
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save bundle", filter="Bundle Files (*.json)")
+        if not path:
+            return
+        try:
+            write_bundle(path, self.main.items, self.main.money)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Export failed", f"Could not write bundle:\n{exc}")
+        else:
+            QtWidgets.QMessageBox.information(
+                self,
+                "Export",
+                f"Bundle exported with {len(self.main.items)} items and {len(self.main.money)} money entries.",
+            )
 
     def _clear_filters(self) -> None:
         self.search_edit.clear()

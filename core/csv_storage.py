@@ -1,8 +1,10 @@
 import csv
+import json
 import os
 import time
 from contextlib import contextmanager
-from typing import Iterable, List
+from datetime import datetime, timezone
+from typing import Dict, Iterable, List, Tuple
 
 from core.models import DATE_FMT, ItemRecord, MoneyRecord
 
@@ -92,3 +94,29 @@ def write_money(path: str, entries: Iterable[MoneyRecord]) -> None:
         writer.writeheader()
         for entry in entries:
             writer.writerow(entry.to_row(DATE_FMT))
+
+
+def write_bundle(path: str, items: Iterable[ItemRecord], money: Iterable[MoneyRecord]) -> None:
+    payload: Dict[str, object] = {
+        "metadata": {
+            "version": 1,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        },
+        "items": [item.to_row(DATE_FMT) for item in items],
+        "money": [entry.to_row(DATE_FMT) for entry in money],
+    }
+    with locked_file(path, "w") as fh:
+        json.dump(payload, fh, ensure_ascii=False, indent=2)
+
+
+def read_bundle(path: str) -> Tuple[List[ItemRecord], List[MoneyRecord], Dict[str, object]]:
+    if not os.path.exists(path):
+        return [], [], {}
+    with locked_file(path, "r") as fh:
+        data = json.load(fh)
+    items_raw = data.get("items", [])
+    money_raw = data.get("money", [])
+    metadata = data.get("metadata", {})
+    items = [ItemRecord.from_row(row, DATE_FMT) for row in items_raw]
+    money = [MoneyRecord.from_row(row, DATE_FMT) for row in money_raw]
+    return items, money, metadata
