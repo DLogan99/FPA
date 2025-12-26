@@ -1,0 +1,23 @@
+{
+  "weights": {
+    "date": 1.0,
+    "cost": 1.0,
+    "urgency": 1.0,
+    "value": 1.0,
+    "want": 1.0,
+    "price_comp": 1.0,
+    "effect": 1.0
+  },
+  "date_scoring": {
+    "recent_days": 7,
+    "mid_days": 30
+  },
+  "cost_bands": [
+    {"max": 50, "score": 5},
+    {"max": 150, "score": 4},
+    {"max": 400, "score": 3},
+    {"max": 800, "score": 2},
+    {"max": null, "score": 1}
+  ],
+  "urgency_override": 5
+}
