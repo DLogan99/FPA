@@ -105,6 +105,7 @@ def _weights_template(config: dict) -> str:
         f"weight_cost={weights.get('cost', 1.0)}",
         f"weight_urgency={weights.get('urgency', 1.0)}",
         f"weight_value={weights.get('value', 1.0)}",
+        f"weight_want={weights.get('want', 1.0)}",
         f"weight_price_comp={weights.get('price_comp', 1.0)}",
         f"weight_effect={weights.get('effect', 1.0)}",
         "",

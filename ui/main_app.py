@@ -1143,10 +1143,6 @@ class ItemDialog(QtWidgets.QDialog):
         self.cost = QtWidgets.QDoubleSpinBox()
         self.cost.setMaximum(1_000_000)
         self.cost.setPrefix(self.main.currency_symbol)
-        self.urgency = self._create_rating_combo()
-        self.value = self._create_rating_combo()
-        self.price_comp = self._create_rating_combo()
-        self.effect = self._create_rating_combo()
         self.urgency = QtWidgets.QSpinBox()
         self.urgency.setRange(1, 5)
         self.value = QtWidgets.QSpinBox()
@@ -1190,22 +1186,17 @@ class ItemDialog(QtWidgets.QDialog):
 
         self._set_tab_order(buttons)
 
-    def _create_rating_combo(self) -> QtWidgets.QComboBox:
-        combo = QtWidgets.QComboBox()
-        combo.addItems([str(i) for i in range(1, 6)])
-        combo.setFocusPolicy(QtCore.Qt.StrongFocus)
-        combo.setInsertPolicy(QtWidgets.QComboBox.NoInsert)
-        return combo
-
     def _set_tab_order(self, buttons: QtWidgets.QDialogButtonBox) -> None:
         self.setTabOrder(self.date_edit, self.product)
         self.setTabOrder(self.product, self.description)
-        self.setTabOrder(self.description, self.location)
-        self.setTabOrder(self.location, self.reference)
+        self.setTabOrder(self.description, self.location_combo)
+        self.setTabOrder(self.location_combo, self.location_other)
+        self.setTabOrder(self.location_other, self.reference)
         self.setTabOrder(self.reference, self.cost)
         self.setTabOrder(self.cost, self.urgency)
         self.setTabOrder(self.urgency, self.value)
-        self.setTabOrder(self.value, self.price_comp)
+        self.setTabOrder(self.value, self.want)
+        self.setTabOrder(self.want, self.price_comp)
         self.setTabOrder(self.price_comp, self.effect)
         self.setTabOrder(self.effect, self.justification)
         self.setTabOrder(self.justification, self.recurrence)
@@ -1235,10 +1226,6 @@ class ItemDialog(QtWidgets.QDialog):
             self.location_other.setEnabled(True)
         self.reference.setText(item.reference)
         self.cost.setValue(item.cost)
-        self._set_rating_selection(self.urgency, item.urgency)
-        self._set_rating_selection(self.value, item.value)
-        self._set_rating_selection(self.price_comp, item.price_comp)
-        self._set_rating_selection(self.effect, item.effect)
         self.urgency.setValue(item.urgency)
         self.value.setValue(item.value)
         self.want.setValue(item.want)
@@ -1249,12 +1236,6 @@ class ItemDialog(QtWidgets.QDialog):
             idx = self.recurrence.findText(item.recurrence)
             if idx >= 0:
                 self.recurrence.setCurrentIndex(idx)
-
-    def _set_rating_selection(self, combo: QtWidgets.QComboBox, value: int) -> None:
-        text = str(int(value))
-        idx = combo.findText(text)
-        if idx >= 0:
-            combo.setCurrentIndex(idx)
 
     def _save(self) -> None:
         try:
@@ -1275,10 +1256,6 @@ class ItemDialog(QtWidgets.QDialog):
             location=location_value,
             reference=self.reference.text(),
             cost=float(self.cost.value()),
-            urgency=int(self.urgency.currentText()),
-            value=int(self.value.currentText()),
-            price_comp=int(self.price_comp.currentText()),
-            effect=int(self.effect.currentText()),
             urgency=int(self.urgency.value()),
             value=int(self.value.value()),
             want=int(self.want.value()),

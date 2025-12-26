@@ -106,6 +106,7 @@ class ConfigManager:
             "weight_cost": "cost",
             "weight_urgency": "urgency",
             "weight_value": "value",
+            "weight_want": "want",
             "weight_price_comp": "price_comp",
             "weight_effect": "effect",
         }
@@ -136,32 +137,30 @@ class ConfigManager:
                     warnings.append(f"Line {idx}: invalid integer for date_mid_days; using default.")
                 continue
             if key.startswith("cost_band"):
-                parts = key.split("_")
-                if len(parts) == 3 and parts[2] in {"max", "score"}:
-                    band_name = parts[0]
-                    band_idx = band_name.replace("cost_band", "")
-                    try:
-                        band_num = int(band_idx)
-                    except ValueError:
-                        warnings.append(f"Line {idx}: invalid band index in {key}; ignored.")
-                        continue
-                    while len(config.setdefault("cost_bands", [])) < band_num:
-                        config["cost_bands"].append({"max": None, "score": 1})
-                    band = config["cost_bands"][band_num - 1]
-                    if parts[2] == "max":
-                        if value.lower() in {"none", ""}:
-                            band["max"] = None
+                suffix = key[len("cost_band") :]
+                if "_" in suffix:
+                    band_idx_str, field = suffix.split("_", 1)
+                    if band_idx_str.isdigit() and field in {"max", "score"}:
+                        band_num = int(band_idx_str)
+                        while len(config.setdefault("cost_bands", [])) < band_num:
+                            config["cost_bands"].append({"max": None, "score": 1})
+                        band = config["cost_bands"][band_num - 1]
+                        if field == "max":
+                            if value.lower() in {"none", ""}:
+                                band["max"] = None
+                            else:
+                                try:
+                                    band["max"] = float(value)
+                                except ValueError:
+                                    warnings.append(f"Line {idx}: invalid max for {key}; using default.")
                         else:
                             try:
-                                band["max"] = float(value)
+                                band["score"] = float(value)
                             except ValueError:
-                                warnings.append(f"Line {idx}: invalid max for {key}; using default.")
-                    else:
-                        try:
-                            band["score"] = float(value)
-                        except ValueError:
-                            warnings.append(f"Line {idx}: invalid score for {key}; using default.")
-                    continue
+                                warnings.append(f"Line {idx}: invalid score for {key}; using default.")
+                        continue
+                warnings.append(f"Line {idx}: invalid band index in {key}; ignored.")
+                continue
             if key == "urgency_override":
                 try:
                     config["urgency_override"] = int(value)
@@ -183,6 +182,7 @@ class ConfigManager:
             f"weight_cost={weights.get('cost', 1.0)}",
             f"weight_urgency={weights.get('urgency', 1.0)}",
             f"weight_value={weights.get('value', 1.0)}",
+            f"weight_want={weights.get('want', 1.0)}",
             f"weight_price_comp={weights.get('price_comp', 1.0)}",
             f"weight_effect={weights.get('effect', 1.0)}",
             "",
