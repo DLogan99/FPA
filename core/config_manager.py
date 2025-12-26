@@ -1,9 +1,12 @@
+import csv
 import json
 import os
 import shutil
 import sys
 from copy import deepcopy
 from typing import Any, Dict, List, Optional, Tuple
+
+from core.models import ItemRecord, MoneyRecord
 
 
 class ConfigManager:
@@ -264,25 +267,53 @@ class ConfigManager:
 
     def _apply_defaults(self) -> None:
         paths = self.settings.setdefault("paths", {})
-        paths.setdefault("items_csv", os.path.join(self.user_root, "data", "items.csv"))
-        paths.setdefault("money_csv", os.path.join(self.user_root, "data", "money.csv"))
-        paths.setdefault("backup_dir", os.path.join(self.user_root, "backups"))
-        self.settings.setdefault(
-            "backup",
-            {
-                "keep_recent": 3,
-                "keep_historical": 3,
-            },
-        )
-        self.settings.setdefault("themes", {"default": "light"})
-        self.settings.setdefault(
-            "ui",
-            {
-                "date_format": "%Y-%m-%d %H:%M",
-                "currency_symbol": "$",
-                "autosave": True,
-            },
-        )
+        changed = False
+
+        if not paths.get("items_csv"):
+            paths["items_csv"] = os.path.join(self.user_root, "data", "items.csv")
+            changed = True
+        if not paths.get("money_csv"):
+            paths["money_csv"] = os.path.join(self.user_root, "data", "money.csv")
+            changed = True
+        if not paths.get("backup_dir"):
+            paths["backup_dir"] = os.path.join(self.user_root, "backups")
+            changed = True
+
+        backup_defaults = {
+            "keep_recent": 3,
+            "keep_historical": 3,
+        }
+        if "backup" not in self.settings:
+            self.settings["backup"] = dict(backup_defaults)
+            changed = True
+        else:
+            for key, value in backup_defaults.items():
+                if key not in self.settings["backup"]:
+                    self.settings["backup"][key] = value
+                    changed = True
+
+        if "themes" not in self.settings:
+            self.settings["themes"] = {"default": "light"}
+            changed = True
+        else:
+            if "default" not in self.settings["themes"]:
+                self.settings["themes"]["default"] = "light"
+                changed = True
+
+        ui_defaults = {
+            "date_format": "%Y-%m-%d %H:%M",
+            "currency_symbol": "$",
+            "autosave": True,
+        }
+        if "ui" not in self.settings:
+            self.settings["ui"] = dict(ui_defaults)
+            changed = True
+        else:
+            for key, value in ui_defaults.items():
+                if key not in self.settings["ui"]:
+                    self.settings["ui"][key] = value
+                    changed = True
+
         self.weights.setdefault(
             "weights",
             {
@@ -314,6 +345,9 @@ class ConfigManager:
             table.setdefault("header_fg", theme.get("foreground", "#000000"))
             table.setdefault("row_bg", theme.get("background", "#ffffff"))
             table.setdefault("alt_row_bg", theme.get("background", "#ffffff"))
+
+        if changed:
+            self.save_settings()
 
     def save_settings(self) -> None:
         os.makedirs(os.path.dirname(self.settings_path), exist_ok=True)
@@ -359,3 +393,45 @@ def ensure_paths(settings: Dict[str, Any]) -> None:
         path = paths.get(key)
         if path:
             os.makedirs(os.path.dirname(path) if key != "backup_dir" else path, exist_ok=True)
+
+
+def ensure_startup_files(config: "ConfigManager") -> None:
+    """Create all files the application expects at startup if they are missing."""
+    _ensure_json_if_missing(config.settings_path, config.settings)
+    _ensure_text_if_missing(config.weights_path, config._weights_template(config.weights))
+    _ensure_json_if_missing(config.themes_path, config.themes)
+
+    paths = config.settings.get("paths", {})
+    _ensure_csv_if_missing(paths.get("items_csv"), ItemRecord.headers())
+    _ensure_csv_if_missing(paths.get("money_csv"), MoneyRecord.headers())
+    backup_dir = paths.get("backup_dir")
+    if backup_dir:
+        os.makedirs(backup_dir, exist_ok=True)
+
+
+def _ensure_json_if_missing(path: Optional[str], payload: Dict[str, Any]) -> None:
+    if not path:
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if not os.path.exists(path):
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2)
+
+
+def _ensure_text_if_missing(path: Optional[str], contents: str) -> None:
+    if not path:
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if not os.path.exists(path):
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(contents)
+
+
+def _ensure_csv_if_missing(path: Optional[str], headers: List[str]) -> None:
+    if not path:
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if not os.path.exists(path):
+        with open(path, "w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=headers)
+            writer.writeheader()
