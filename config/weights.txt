@@ -5,6 +5,7 @@ weight_date=1.0
 weight_cost=1.0
 weight_urgency=1.0
 weight_value=1.0
+weight_want=1.0
 weight_price_comp=1.0
 weight_effect=1.0
 
