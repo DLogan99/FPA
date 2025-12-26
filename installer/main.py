@@ -14,10 +14,11 @@ from core.config_manager import ConfigManager
 from core.models import ItemRecord, MoneyRecord
 
 
-DEFAULT_INSTALL_DIR = Path(os.environ.get("LOCALAPPDATA", "")) / "FinancePlanner"
-START_MENU_DIR = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
-DESKTOP_DIR = Path(os.environ.get("USERPROFILE", "")) / "Desktop"
-APPDATA_DIR = Path(os.environ.get("APPDATA", "")) / "finance_planner"
+DEFAULT_INSTALL_DIR = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "FinancePlanner")
+START_MENU_DIR = Path(os.environ.get("APPDATA") or Path.home() / ".local/share") / "Microsoft" / "Windows" / "Start Menu" / "Programs"
+DESKTOP_DIR = Path(os.environ.get("USERPROFILE") or Path.home()) / "Desktop"
+USER_DATA_ROOT = Path(ConfigManager._user_data_root())
+APPDATA_DIR = USER_DATA_ROOT
 DEFAULT_EXE_PATH = Path("dist") / "finance_planner.exe"
 DEFAULT_ARCHIVE_PATH = Path("dist") / "finance_planner.zip"
 

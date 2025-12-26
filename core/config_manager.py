@@ -268,28 +268,6 @@ class ConfigManager:
 
     def _apply_defaults(self) -> None:
         paths = self.settings.setdefault("paths", {})
-        paths.setdefault("items_csv", os.path.join(self.user_root, "data", "items.csv"))
-        paths.setdefault("money_csv", os.path.join(self.user_root, "data", "money.csv"))
-        paths.setdefault("backup_dir", os.path.join(self.user_root, "backups"))
-        self.settings.setdefault(
-            "backup",
-            {
-                "keep_recent": 3,
-                "keep_historical": 3,
-            },
-        )
-        self.settings.setdefault("themes", {"default": "light"})
-        self.settings.setdefault(
-            "ui",
-            {
-                "date_format": "%Y-%m-%d %H:%M",
-                "currency_symbol": "$",
-                "autosave": True,
-            },
-        )
-        self.weights.setdefault("weights", {})
-        for key in ["date", "cost", "urgency", "value", "want", "price_comp", "effect"]:
-            self.weights["weights"].setdefault(key, 1.0)
         changed = False
 
         if not paths.get("items_csv"):
