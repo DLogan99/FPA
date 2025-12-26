@@ -226,11 +226,12 @@ class ConfigManager:
             "weights": {
                 "date": 1.0,
                 "cost": 1.0,
-                "urgency": 1.0,
-                "value": 1.0,
-                "price_comp": 1.0,
-                "effect": 1.0,
-            },
+            "urgency": 1.0,
+            "value": 1.0,
+            "want": 1.0,
+            "price_comp": 1.0,
+            "effect": 1.0,
+        },
             "date_scoring": {"recent_days": 7, "mid_days": 30},
             "cost_bands": [
                 {"max": 50, "score": 5},

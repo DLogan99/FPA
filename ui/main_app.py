@@ -293,6 +293,7 @@ class ItemViewDialog(QtWidgets.QDialog):
 
         add_eval("Urgency", self._readonly_field(str(record.urgency)))
         add_eval("Value", self._readonly_field(str(record.value)))
+        add_eval("Want", self._readonly_field(str(record.want)))
         add_eval("Price vs Similar", self._readonly_field(str(record.price_comp)))
         add_eval("Effect", self._readonly_field(str(record.effect)))
         add_eval("Overall Score", self._readonly_field(f"{(record.overall_score or 0):.2f}"))
@@ -402,8 +403,8 @@ class PurchasesWidget(QtWidgets.QWidget):
         controls.addWidget(clear_btn)
         layout.addLayout(controls)
 
-        self.table = QtWidgets.QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["Product", "Date", "Cost", "Urgency", "Overall"])
+        self.table = QtWidgets.QTableWidget(0, 6)
+        self.table.setHorizontalHeaderLabels(["Product", "Date", "Cost", "Urgency", "Want", "Overall"])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
@@ -456,6 +457,7 @@ class PurchasesWidget(QtWidgets.QWidget):
                 item.date.strftime(self.main.date_fmt),
                 f"{self.main.currency_symbol}{item.cost:.2f}",
                 str(item.urgency),
+                str(item.want),
                 f"{(item.overall_score or 0):.2f}",
             ]
             for col, val in enumerate(values):
@@ -1070,6 +1072,42 @@ class SettingsWidget(QtWidgets.QWidget):
         row.addWidget(copy_btn)
         layout.addRow(label, row)
 
+    def _add_weights_group(self, layout: QtWidgets.QFormLayout) -> None:
+        group = QtWidgets.QGroupBox("Weights (admin)")
+        g_layout = QtWidgets.QFormLayout(group)
+        g_layout.setLabelAlignment(QtCore.Qt.AlignLeft)
+        self.weight_spins = {}
+        labels = [
+            ("Date", "date"),
+            ("Cost", "cost"),
+            ("Urgency", "urgency"),
+            ("Value", "value"),
+            ("Want", "want"),
+            ("Price vs Similar", "price_comp"),
+            ("Effect", "effect"),
+        ]
+        weights = self.main.weights.get("weights", {})
+        for label, key in labels:
+            spin = QtWidgets.QDoubleSpinBox()
+            spin.setRange(0.0, 10.0)
+            spin.setSingleStep(0.1)
+            spin.setValue(float(weights.get(key, 1.0)))
+            spin.setSuffix("×")
+            g_layout.addRow(f"{label} weight", spin)
+            self.weight_spins[key] = spin
+        save_btn = QtWidgets.QPushButton("Save weights")
+        save_btn.clicked.connect(self._save_weights)
+        g_layout.addRow(save_btn)
+        layout.addRow(group)
+
+    def _save_weights(self) -> None:
+        weights_cfg = self.main.weights
+        weights_cfg.setdefault("weights", {})
+        for key, spin in self.weight_spins.items():
+            weights_cfg["weights"][key] = spin.value()
+        self.main.apply_weights(weights_cfg)
+        QtWidgets.QMessageBox.information(self, "Weights", "Weights saved and applied.")
+
 
 class ItemDialog(QtWidgets.QDialog):
     def __init__(self, main: MainWindow, existing: Optional[ItemRecord]) -> None:
@@ -1109,6 +1147,17 @@ class ItemDialog(QtWidgets.QDialog):
         self.value = self._create_rating_combo()
         self.price_comp = self._create_rating_combo()
         self.effect = self._create_rating_combo()
+        self.urgency = QtWidgets.QSpinBox()
+        self.urgency.setRange(1, 5)
+        self.value = QtWidgets.QSpinBox()
+        self.value.setRange(1, 5)
+        self.want = QtWidgets.QSpinBox()
+        self.want.setRange(1, 5)
+        self.want.setValue(3)
+        self.price_comp = QtWidgets.QSpinBox()
+        self.price_comp.setRange(1, 5)
+        self.effect = QtWidgets.QSpinBox()
+        self.effect.setRange(1, 5)
         self.justification = QtWidgets.QLineEdit()
         self.recurrence = QtWidgets.QComboBox()
         self.recurrence.setFocusPolicy(QtCore.Qt.StrongFocus)
@@ -1128,6 +1177,7 @@ class ItemDialog(QtWidgets.QDialog):
         layout.addRow("Cost", self.cost)
         layout.addRow("Urgency", self.urgency)
         layout.addRow("Value", self.value)
+        layout.addRow("Want", self.want)
         layout.addRow("Price vs Similar", self.price_comp)
         layout.addRow("Effect", self.effect)
         layout.addRow("Justification", self.justification)
@@ -1189,6 +1239,11 @@ class ItemDialog(QtWidgets.QDialog):
         self._set_rating_selection(self.value, item.value)
         self._set_rating_selection(self.price_comp, item.price_comp)
         self._set_rating_selection(self.effect, item.effect)
+        self.urgency.setValue(item.urgency)
+        self.value.setValue(item.value)
+        self.want.setValue(item.want)
+        self.price_comp.setValue(item.price_comp)
+        self.effect.setValue(item.effect)
         self.justification.setText(item.justification)
         if item.recurrence:
             idx = self.recurrence.findText(item.recurrence)
@@ -1224,6 +1279,11 @@ class ItemDialog(QtWidgets.QDialog):
             value=int(self.value.currentText()),
             price_comp=int(self.price_comp.currentText()),
             effect=int(self.effect.currentText()),
+            urgency=int(self.urgency.value()),
+            value=int(self.value.value()),
+            want=int(self.want.value()),
+            price_comp=int(self.price_comp.value()),
+            effect=int(self.effect.value()),
             justification=self.justification.text(),
             recurrence=self.recurrence.currentText(),
         )
