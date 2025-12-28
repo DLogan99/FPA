@@ -69,7 +69,8 @@ def read_items(path: str) -> List[ItemRecord]:
         return []
     with locked_file(path, "r") as fh:
         reader = csv.DictReader(fh)
-        return [ItemRecord.from_row(row, DATE_FMT) for row in reader]
+        _validate_headers(path, reader.fieldnames, ItemRecord.headers())
+        return [_safe_record_from_row(ItemRecord.from_row, row, path, reader.line_num) for row in reader]
 
 
 def write_items(path: str, items: Iterable[ItemRecord]) -> None:
@@ -85,7 +86,8 @@ def read_money(path: str) -> List[MoneyRecord]:
         return []
     with locked_file(path, "r") as fh:
         reader = csv.DictReader(fh)
-        return [MoneyRecord.from_row(row, DATE_FMT) for row in reader]
+        _validate_headers(path, reader.fieldnames, MoneyRecord.headers())
+        return [_safe_record_from_row(MoneyRecord.from_row, row, path, reader.line_num) for row in reader]
 
 
 def write_money(path: str, entries: Iterable[MoneyRecord]) -> None:
@@ -117,6 +119,22 @@ def read_bundle(path: str) -> Tuple[List[ItemRecord], List[MoneyRecord], Dict[st
     items_raw = data.get("items", [])
     money_raw = data.get("money", [])
     metadata = data.get("metadata", {})
-    items = [ItemRecord.from_row(row, DATE_FMT) for row in items_raw]
-    money = [MoneyRecord.from_row(row, DATE_FMT) for row in money_raw]
+    items = [_safe_record_from_row(ItemRecord.from_row, row, path) for row in items_raw]
+    money = [_safe_record_from_row(MoneyRecord.from_row, row, path) for row in money_raw]
     return items, money, metadata
+
+
+def _validate_headers(path: str, headers: List[str] | None, expected: List[str]) -> None:
+    if headers is None:
+        raise ValueError(f"{path}: Missing header row")
+    missing = [h for h in expected if h not in headers]
+    if missing:
+        raise ValueError(f"{path}: Missing required columns: {', '.join(missing)}")
+
+
+def _safe_record_from_row(factory, row: Dict[str, str], path: str, line_num: int | None = None):
+    try:
+        return factory(row, DATE_FMT)
+    except Exception as exc:
+        location = f"{path} (line {line_num})" if line_num else path
+        raise ValueError(f"Failed to parse record in {location}: {exc}") from exc
