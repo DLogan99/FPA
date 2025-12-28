@@ -1,6 +1,7 @@
 import csv
 import json
 import os
+import re
 import shutil
 import sys
 from copy import deepcopy
@@ -136,33 +137,27 @@ class ConfigManager:
                 except ValueError:
                     warnings.append(f"Line {idx}: invalid integer for date_mid_days; using default.")
                 continue
-            if key.startswith("cost_band"):
-                parts = key.split("_")
-                if len(parts) == 3 and parts[2] in {"max", "score"}:
-                    band_name = parts[0]
-                    band_idx = band_name.replace("cost_band", "")
-                    try:
-                        band_num = int(band_idx)
-                    except ValueError:
-                        warnings.append(f"Line {idx}: invalid band index in {key}; ignored.")
-                        continue
-                    while len(config.setdefault("cost_bands", [])) < band_num:
-                        config["cost_bands"].append({"max": None, "score": 1})
-                    band = config["cost_bands"][band_num - 1]
-                    if parts[2] == "max":
-                        if value.lower() in {"none", ""}:
-                            band["max"] = None
-                        else:
-                            try:
-                                band["max"] = float(value)
-                            except ValueError:
-                                warnings.append(f"Line {idx}: invalid max for {key}; using default.")
+            cost_band_match = re.match(r"cost_band(\d+)_(max|score)$", key)
+            if cost_band_match:
+                band_num = int(cost_band_match.group(1))
+                band_field = cost_band_match.group(2)
+                while len(config.setdefault("cost_bands", [])) < band_num:
+                    config["cost_bands"].append({"max": None, "score": 1})
+                band = config["cost_bands"][band_num - 1]
+                if band_field == "max":
+                    if value.lower() in {"none", ""}:
+                        band["max"] = None
                     else:
                         try:
-                            band["score"] = float(value)
+                            band["max"] = float(value)
                         except ValueError:
-                            warnings.append(f"Line {idx}: invalid score for {key}; using default.")
-                    continue
+                            warnings.append(f"Line {idx}: invalid max for {key}; using default.")
+                else:
+                    try:
+                        band["score"] = float(value)
+                    except ValueError:
+                        warnings.append(f"Line {idx}: invalid score for {key}; using default.")
+                continue
             if key == "urgency_override":
                 try:
                     config["urgency_override"] = int(value)
