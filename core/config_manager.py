@@ -157,6 +157,30 @@ class ConfigManager:
                         band["score"] = float(value)
                     except ValueError:
                         warnings.append(f"Line {idx}: invalid score for {key}; using default.")
+            if key.startswith("cost_band"):
+                suffix = key[len("cost_band") :]
+                if "_" in suffix:
+                    band_idx_str, field = suffix.split("_", 1)
+                    if band_idx_str.isdigit() and field in {"max", "score"}:
+                        band_num = int(band_idx_str)
+                        while len(config.setdefault("cost_bands", [])) < band_num:
+                            config["cost_bands"].append({"max": None, "score": 1})
+                        band = config["cost_bands"][band_num - 1]
+                        if field == "max":
+                            if value.lower() in {"none", ""}:
+                                band["max"] = None
+                            else:
+                                try:
+                                    band["max"] = float(value)
+                                except ValueError:
+                                    warnings.append(f"Line {idx}: invalid max for {key}; using default.")
+                        else:
+                            try:
+                                band["score"] = float(value)
+                            except ValueError:
+                                warnings.append(f"Line {idx}: invalid score for {key}; using default.")
+                        continue
+                warnings.append(f"Line {idx}: invalid band index in {key}; ignored.")
                 continue
             if key == "urgency_override":
                 try:
