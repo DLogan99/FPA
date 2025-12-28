@@ -1,1 +1,6 @@
 "Card List","Card","Description","Due Date","Labels","Subtasks","Comments"
+"Backlog","Card Title","Card Description","Jan 3, 12:00am","card label","Card Subtask","Card Comments"
+"Processing","processing","","","","",""
+"Working","working","","","","",""
+"Testing","testing","","","","",""
+"Completed","completed","","","","",""
