@@ -1,18 +1,16 @@
 # Finance Planner (Python)
 
-Local-first finance planner built with Tkinter. Data is stored in CSV files with configurable JSON settings and themes plus a plain-text weights file. Defaults are bundled and copied to your OS data directory on first run (e.g., `%APPDATA%/finance_planner` on Windows or `~/.local/share/finance_planner` on Linux).
+Local-first finance planner built with PySide6 (Qt). Data is stored in CSV files with configurable JSON settings and themes plus a plain-text weights file. Defaults are bundled and copied to your OS data directory on first run (e.g., `%APPDATA%/finance_planner` on Windows or `~/.local/share/finance_planner` on Linux).
 
 ## Features
 - Purchases/Items: add, edit, view, delete, import/export CSV, search/filter, and score via configurable weights with total spend, average score, and item counts.
-- Money: track income/expense entries, search/filter, import/export CSV, link to purchases by ID, and see income/expense totals with a running balance and entry counts.
-- Keyboard and mouse shortcuts: double-click rows to edit, Delete to remove selected rows, Ctrl+F to search, Ctrl+N/Ctrl+E to add/edit, Enter to edit a selected row.
-- Shortcut help: press F1 or use Help → Keyboard shortcuts for a quick list.
+- Money: track income/expense entries, search/filter, import/export CSV, link to purchases by ID, and see income/expense totals with a running balance.
+- Keyboard and mouse shortcuts: double-click rows to edit, Ctrl+F to search, Ctrl+N/Ctrl+E to add/edit.
 - Quick filtering: score filters for purchases (high/low) and type filters for money (income/expense) alongside text search.
-- Date pickers: use the Pick button on date fields in item and money dialogs for a quick calendar selection.
-- Settings: update UI basics, back up on-demand, open the data or config folders, and copy key file paths (items, money, backups, settings/weights/themes).
-- Settings: update currency formatting, date display, theme, and backup retention.
+- Date pickers: calendar popup in item and money dialogs for quick date selection.
+- Settings: toggle autosave, select theme, back up on-demand, open the data or config folders, and copy key file paths (items, money, backups, settings/weights/themes).
 - Backups: timestamped copies with retention (3 recent + 3 historical by default).
-- Config and themes are user-writable JSON in the data directory; defaults are auto-created on first run.
+- Config and themes are user-writable JSON in the data directory; defaults are auto-created on first run. Edit `settings.json` to change currency/date formats or backup retention.
 - Weights: edit `weights.txt` (key=value lines) and restart the app to apply changes.
 
 ## Install / Run
@@ -58,6 +56,3 @@ Options:
 - `--desktop` to add a Desktop shortcut
 - `--taskbar` to attempt pinning to the taskbar (may require elevation)
 - `--uninstall` to remove installed files and shortcuts (user data under `%APPDATA%\finance_planner` is preserved)
-
-## CI artifacts
-GitHub Actions workflow `.github/workflows/build.yml` builds standalone binaries for Linux and Windows using PyInstaller and uploads them as artifacts on each push/PR.
