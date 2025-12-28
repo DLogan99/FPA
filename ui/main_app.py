@@ -5,7 +5,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
@@ -43,6 +43,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.settings = config.settings
         self.weights = config.weights
         self.theme = config.get_theme()
+        self.apply_theme()
         self.items_path = self.settings["paths"]["items_csv"]
         self.money_path = self.settings["paths"]["money_csv"]
         self.backup_dir = self.settings["paths"]["backup_dir"]
@@ -182,6 +183,54 @@ class MainWindow(QtWidgets.QMainWindow):
     def _rescore_items(self) -> None:
         for item in self.items:
             item.overall_score = score_item(item, self.weights).overall
+
+    def apply_theme(self, name: Optional[str] = None) -> None:
+        theme_name = name or self.settings.get("themes", {}).get("default", "light")
+        if theme_name not in self.config_manager.themes:
+            theme_name = "light"
+            self.config_manager.set_default_theme(theme_name)
+        elif name is not None:
+            self.config_manager.set_default_theme(theme_name)
+        self.theme = self.config_manager.get_theme(theme_name)
+        self._apply_theme_palette(self.theme)
+
+    def _apply_theme_palette(self, theme: Dict[str, object]) -> None:
+        app = QtWidgets.QApplication.instance()
+        if app is None:
+            return
+        background = QtGui.QColor(str(theme.get("background", "#ffffff")))
+        foreground = QtGui.QColor(str(theme.get("foreground", "#000000")))
+        accent = QtGui.QColor(str(theme.get("accent", "#2563eb")))
+        muted = str(theme.get("muted", "#94a3b8"))
+        table = theme.get("table", {})
+        table = table if isinstance(table, dict) else {}
+        row_bg = QtGui.QColor(str(table.get("row_bg", theme.get("background", "#ffffff"))))
+        alt_row_bg = QtGui.QColor(str(table.get("alt_row_bg", theme.get("background", "#ffffff"))))
+
+        palette = app.palette()
+        palette.setColor(QtGui.QPalette.Window, background)
+        palette.setColor(QtGui.QPalette.WindowText, foreground)
+        palette.setColor(QtGui.QPalette.Base, row_bg)
+        palette.setColor(QtGui.QPalette.AlternateBase, alt_row_bg)
+        palette.setColor(QtGui.QPalette.Text, foreground)
+        palette.setColor(QtGui.QPalette.Button, background)
+        palette.setColor(QtGui.QPalette.ButtonText, foreground)
+        palette.setColor(QtGui.QPalette.Highlight, accent)
+        palette.setColor(QtGui.QPalette.HighlightedText, background)
+        app.setPalette(palette)
+        app.setStyleSheet(self._theme_stylesheet(theme, muted))
+
+    def _theme_stylesheet(self, theme: Dict[str, object], muted: str) -> str:
+        table = theme.get("table", {})
+        table = table if isinstance(table, dict) else {}
+        header_bg = table.get("header_bg", theme.get("background", "#ffffff"))
+        header_fg = table.get("header_fg", theme.get("foreground", "#000000"))
+        row_bg = table.get("row_bg", theme.get("background", "#ffffff"))
+        alt_row_bg = table.get("alt_row_bg", theme.get("background", "#ffffff"))
+        foreground = theme.get("foreground", "#000000")
+        accent = theme.get("accent", "#2563eb")
+        background = theme.get("background", "#ffffff")
+        return f\"\"\"\nQTableWidget {{\n  background-color: {row_bg};\n  alternate-background-color: {alt_row_bg};\n  gridline-color: {muted};\n  color: {foreground};\n}}\nQHeaderView::section {{\n  background-color: {header_bg};\n  color: {header_fg};\n  border: 1px solid {muted};\n  padding: 4px 6px;\n}}\nQLineEdit, QPlainTextEdit, QComboBox, QSpinBox, QDoubleSpinBox, QDateTimeEdit {{\n  background-color: {row_bg};\n  color: {foreground};\n  border: 1px solid {muted};\n}}\nQPushButton {{\n  background-color: {header_bg};\n  color: {header_fg};\n  border: 1px solid {muted};\n  padding: 4px 8px;\n}}\nQPushButton:hover {{\n  background-color: {accent};\n  color: {background};\n}}\n\"\"\"
 
     def save_items(self, trigger_backup: bool = True) -> None:
         write_items(self.items_path, self.items)
@@ -994,6 +1043,15 @@ class SettingsWidget(QtWidgets.QWidget):
         self.autosave_check.stateChanged.connect(self._toggle_autosave)
         layout.addRow("Autosave", self.autosave_check)
 
+        self.theme_combo = QtWidgets.QComboBox()
+        theme_names = sorted(self.main.config_manager.themes.keys())
+        self.theme_combo.addItems(theme_names)
+        current_theme = self.main.settings.get("themes", {}).get("default", "light")
+        if current_theme in theme_names:
+            self.theme_combo.setCurrentText(current_theme)
+        self.theme_combo.currentTextChanged.connect(self._set_theme)
+        layout.addRow("Theme", self.theme_combo)
+
         backup_btn = QtWidgets.QPushButton("Backup now")
         backup_btn.clicked.connect(self._backup_now)
         open_btn = QtWidgets.QPushButton("Open data folder")
@@ -1022,6 +1080,11 @@ class SettingsWidget(QtWidgets.QWidget):
     def _toggle_autosave(self, state: int) -> None:
         self.main.settings["ui"]["autosave"] = bool(state)
         self.main.config_manager.save_settings()
+
+    def _set_theme(self, name: str) -> None:
+        if not name:
+            return
+        self.main.apply_theme(name)
 
     def _backup_now(self) -> None:
         try:
