@@ -415,7 +415,7 @@ class PurchasesWidget(QtWidgets.QWidget):
         header = self.table.horizontalHeader()
         header.setSortIndicatorShown(True)
         header.sectionClicked.connect(self._handle_sort)
-        self.table.setSortingEnabled(True)
+        self.table.setSortingEnabled(False)
         layout.addWidget(self.table)
 
         summary = QtWidgets.QHBoxLayout()
@@ -466,7 +466,6 @@ class PurchasesWidget(QtWidgets.QWidget):
             if item.overall_score is not None:
                 scored += 1
                 score_sum += item.overall_score
-        self.table.setSortingEnabled(True)
         sort_order = QtCore.Qt.AscendingOrder if self.main.item_sort_ascending else QtCore.Qt.DescendingOrder
         self.table.horizontalHeader().setSortIndicator(self.main.item_sort_column, sort_order)
         avg = score_sum / scored if scored else 0.0
@@ -724,7 +723,7 @@ class MoneyWidget(QtWidgets.QWidget):
         header = self.table.horizontalHeader()
         header.setSortIndicatorShown(True)
         header.sectionClicked.connect(self._handle_sort)
-        self.table.setSortingEnabled(True)
+        self.table.setSortingEnabled(False)
         layout.addWidget(self.table)
 
         summary = QtWidgets.QHBoxLayout()
@@ -782,7 +781,6 @@ class MoneyWidget(QtWidgets.QWidget):
             ]
             for col, val in enumerate(values):
                 self.table.setItem(row, col, QtWidgets.QTableWidgetItem(val))
-        self.table.setSortingEnabled(True)
         sort_order = QtCore.Qt.AscendingOrder if self.main.money_sort_ascending else QtCore.Qt.DescendingOrder
         self.table.horizontalHeader().setSortIndicator(self.main.money_sort_column, sort_order)
         balance = income - expense
