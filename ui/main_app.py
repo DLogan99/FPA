@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ctypes
+import math
 import os
 import subprocess
 import sys
@@ -23,6 +24,70 @@ def _merge_by_id(existing, imported):
     return list(merged.values())
 
 
+def _make_icon_pixmap(name: str, color: QtGui.QColor, size: int) -> QtGui.QPixmap:
+    pixmap = QtGui.QPixmap(size, size)
+    pixmap.fill(QtCore.Qt.transparent)
+    painter = QtGui.QPainter(pixmap)
+    painter.setRenderHint(QtGui.QPainter.Antialiasing)
+    pen = QtGui.QPen(color)
+    pen.setWidthF(max(1.6, size * 0.12))
+    pen.setCapStyle(QtCore.Qt.RoundCap)
+    pen.setJoinStyle(QtCore.Qt.RoundJoin)
+    painter.setPen(pen)
+    painter.setBrush(QtCore.Qt.NoBrush)
+
+    pad = size * 0.2
+    center = size / 2
+
+    if name == "add":
+        painter.drawLine(center, pad, center, size - pad)
+        painter.drawLine(pad, center, size - pad, center)
+    elif name == "edit":
+        painter.drawLine(pad, size - pad, size - pad, pad)
+        painter.drawLine(size - pad * 0.9, pad * 0.9, size - pad * 0.6, pad * 0.6)
+    elif name == "view":
+        rect = QtCore.QRectF(pad, size * 0.3, size - 2 * pad, size * 0.4)
+        painter.drawEllipse(rect)
+        painter.setBrush(color)
+        pupil = QtCore.QRectF(center - size * 0.08, center - size * 0.08, size * 0.16, size * 0.16)
+        painter.drawEllipse(pupil)
+        painter.setBrush(QtCore.Qt.NoBrush)
+    elif name == "delete":
+        body = QtCore.QRectF(pad * 1.2, pad * 1.6, size - 2 * pad * 1.2, size - 2 * pad * 1.6)
+        painter.drawRect(body)
+        painter.drawLine(pad, pad * 1.2, size - pad, pad * 1.2)
+        painter.drawLine(size * 0.4, pad * 0.8, size * 0.6, pad * 0.8)
+    elif name in {"import", "export"}:
+        tray = QtCore.QRectF(pad, size * 0.65, size - 2 * pad, size * 0.2)
+        painter.drawRect(tray)
+        if name == "import":
+            painter.drawLine(center, pad, center, size * 0.6)
+            painter.drawLine(center, size * 0.6, center - size * 0.12, size * 0.48)
+            painter.drawLine(center, size * 0.6, center + size * 0.12, size * 0.48)
+        else:
+            painter.drawLine(center, size * 0.6, center, pad)
+            painter.drawLine(center, pad, center - size * 0.12, pad + size * 0.12)
+            painter.drawLine(center, pad, center + size * 0.12, pad + size * 0.12)
+    elif name == "refresh":
+        rect = QtCore.QRectF(pad, pad, size - 2 * pad, size - 2 * pad)
+        start_angle = 40
+        span = 280
+        painter.drawArc(rect, start_angle * 16, span * 16)
+        angle = math.radians(start_angle)
+        radius = (size / 2) - pad
+        end_x = center + radius * math.cos(angle)
+        end_y = center - radius * math.sin(angle)
+        head = size * 0.12
+        painter.drawLine(end_x, end_y, end_x - head, end_y)
+        painter.drawLine(end_x, end_y, end_x, end_y + head)
+    elif name == "clear":
+        painter.drawLine(pad, pad, size - pad, size - pad)
+        painter.drawLine(size - pad, pad, pad, size - pad)
+
+    painter.end()
+    return pixmap
+
+
 def launch() -> None:
     _detach_console_on_windows()
     _redirect_stdio_to_null_on_windows()
@@ -39,6 +104,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, config: ConfigManager) -> None:
         super().__init__()
         self.setWindowTitle("Finance Planner (Qt)")
+        self._icon_cache: Dict[str, QtGui.QIcon] = {}
         self.config_manager = config
         self.settings = config.settings
         self.weights = config.weights
@@ -195,6 +261,24 @@ class MainWindow(QtWidgets.QMainWindow):
             self.config_manager.set_default_theme(theme_name)
         self.theme = self.config_manager.get_theme(theme_name)
         self._apply_theme_palette(self.theme)
+        self._refresh_icons()
+
+    def _refresh_icons(self) -> None:
+        for widget in (self.purchases_tab, self.money_tab, self.settings_tab, self.theme_tab):
+            updater = getattr(widget, "update_icons", None)
+            if callable(updater):
+                updater()
+
+    def get_icon(self, name: str, size: int = 16) -> QtGui.QIcon:
+        color = QtGui.QColor(str(self.theme.get("foreground", "#000000")))
+        cache_key = f"{name}:{size}:{color.name()}"
+        cached = self._icon_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        pixmap = _make_icon_pixmap(name, color, size)
+        icon = QtGui.QIcon(pixmap)
+        self._icon_cache[cache_key] = icon
+        return icon
 
     def _apply_theme_palette(self, theme: Dict[str, object]) -> None:
         app = QtWidgets.QApplication.instance()
@@ -482,6 +566,7 @@ class PurchasesWidget(QtWidgets.QWidget):
         self.filter_combo.currentIndexChanged.connect(self.refresh)
         clear_btn = QtWidgets.QPushButton("Clear Filters")
         clear_btn.clicked.connect(self._clear_filters)
+        self._action_buttons: Dict[str, QtWidgets.QPushButton] = {"Clear Filters": clear_btn}
 
         for text, handler in [
             ("Add Item", self.add_item),
@@ -495,6 +580,7 @@ class PurchasesWidget(QtWidgets.QWidget):
             btn = QtWidgets.QPushButton(text)
             btn.clicked.connect(handler)
             controls.addWidget(btn)
+            self._action_buttons[text] = btn
 
         controls.addStretch()
         controls.addWidget(QtWidgets.QLabel("Filter"))
@@ -526,6 +612,24 @@ class PurchasesWidget(QtWidgets.QWidget):
             summary.addWidget(lbl)
         summary.addStretch()
         layout.addLayout(summary)
+        self.update_icons()
+
+    def update_icons(self) -> None:
+        icon_map = {
+            "Add Item": "add",
+            "Edit": "edit",
+            "View": "view",
+            "Delete": "delete",
+            "Import": "import",
+            "Export": "export",
+            "Refresh": "refresh",
+            "Clear Filters": "clear",
+        }
+        for label, icon_name in icon_map.items():
+            btn = self._action_buttons.get(label)
+            if btn:
+                btn.setIcon(self.main.get_icon(icon_name))
+                btn.setIconSize(QtCore.QSize(16, 16))
 
     def _filtered_items(self) -> List[ItemRecord]:
         query = self.search_edit.text().strip().lower()
@@ -791,6 +895,7 @@ class MoneyWidget(QtWidgets.QWidget):
         self.type_filter.currentIndexChanged.connect(self.refresh)
         clear_btn = QtWidgets.QPushButton("Clear Filters")
         clear_btn.clicked.connect(self._clear_filters)
+        self._action_buttons: Dict[str, QtWidgets.QPushButton] = {"Clear Filters": clear_btn}
 
         for text, handler in [
             ("Add Entry", self.add_entry),
@@ -803,6 +908,7 @@ class MoneyWidget(QtWidgets.QWidget):
             btn = QtWidgets.QPushButton(text)
             btn.clicked.connect(handler)
             controls.addWidget(btn)
+            self._action_buttons[text] = btn
 
         controls.addStretch()
         controls.addWidget(QtWidgets.QLabel("Type"))
@@ -848,6 +954,23 @@ class MoneyWidget(QtWidgets.QWidget):
         breakdown_layout.addLayout(expense_layout)
         breakdown_layout.addLayout(income_layout)
         layout.addWidget(breakdown_group)
+        self.update_icons()
+
+    def update_icons(self) -> None:
+        icon_map = {
+            "Add Entry": "add",
+            "Edit": "edit",
+            "Delete": "delete",
+            "Import": "import",
+            "Export": "export",
+            "Refresh": "refresh",
+            "Clear Filters": "clear",
+        }
+        for label, icon_name in icon_map.items():
+            btn = self._action_buttons.get(label)
+            if btn:
+                btn.setIcon(self.main.get_icon(icon_name))
+                btn.setIconSize(QtCore.QSize(16, 16))
 
     def _build_breakdown_table(self) -> QtWidgets.QTableWidget:
         table = QtWidgets.QTableWidget(0, 3)
