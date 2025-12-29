@@ -46,5 +46,17 @@
       "row_bg": "#0d1117",
       "alt_row_bg": "#111827"
     }
+  },
+  "industrial-slate": {
+    "background": "#121417",
+    "foreground": "#e5e7eb",
+    "accent": "#f97316",
+    "muted": "#8b949e",
+    "table": {
+      "header_bg": "#1f242b",
+      "header_fg": "#e5e7eb",
+      "row_bg": "#151a20",
+      "alt_row_bg": "#0f1419"
+    }
   }
 }
