@@ -245,6 +245,27 @@ QHeaderView::section {{
   border: 1px solid {muted};
   padding: 4px 6px;
 }}
+QTabWidget {{
+  background-color: {background};
+}}
+QTabWidget::pane {{
+  border: 1px solid {muted};
+  background-color: {background};
+}}
+QTabBar::tab {{
+  background-color: {header_bg};
+  color: {header_fg};
+  border: 1px solid {muted};
+  border-bottom: none;
+  padding: 6px 10px;
+}}
+QTabBar::tab:selected {{
+  background-color: {accent};
+  color: {background};
+}}
+QTabBar::tab:!selected {{
+  margin-top: 2px;
+}}
 QLineEdit, QPlainTextEdit, QComboBox, QSpinBox, QDoubleSpinBox, QDateTimeEdit {{
   background-color: {row_bg};
   color: {foreground};
