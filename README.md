@@ -8,7 +8,8 @@ Local-first finance planner built with PySide6 (Qt). Data is stored in CSV files
 - Keyboard and mouse shortcuts: double-click rows to edit, Ctrl+F to search, Ctrl+N/Ctrl+E to add/edit.
 - Quick filtering: score filters for purchases (high/low) and type filters for money (income/expense) alongside text search.
 - Date pickers: calendar popup in item and money dialogs for quick date selection.
-- Settings: toggle autosave, select theme, back up on-demand, open the data or config folders, and copy key file paths (items, money, backups, settings/weights/themes).
+- Themes: select the active theme and apply it immediately.
+- Settings: toggle autosave, back up on-demand, open the data or config folders, and copy key file paths (items, money, backups, settings/weights/themes).
 - Backups: timestamped copies with retention (3 recent + 3 historical by default).
 - Config and themes are user-writable JSON in the data directory; defaults are auto-created on first run. Edit `settings.json` to change currency/date formats or backup retention.
 - Weights: edit `weights.txt` (key=value lines) and restart the app to apply changes.

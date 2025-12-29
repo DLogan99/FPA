@@ -62,9 +62,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tabs = QtWidgets.QTabWidget()
         self.purchases_tab = PurchasesWidget(self)
         self.money_tab = MoneyWidget(self)
+        self.theme_tab = ThemeWidget(self)
         self.settings_tab = SettingsWidget(self)
         self.tabs.addTab(self.purchases_tab, "Purchases")
         self.tabs.addTab(self.money_tab, "Money")
+        self.tabs.addTab(self.theme_tab, "Themes")
         self.tabs.addTab(self.settings_tab, "Settings")
         container = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(container)
@@ -230,7 +232,35 @@ class MainWindow(QtWidgets.QMainWindow):
         foreground = theme.get("foreground", "#000000")
         accent = theme.get("accent", "#2563eb")
         background = theme.get("background", "#ffffff")
-        return f\"\"\"\nQTableWidget {{\n  background-color: {row_bg};\n  alternate-background-color: {alt_row_bg};\n  gridline-color: {muted};\n  color: {foreground};\n}}\nQHeaderView::section {{\n  background-color: {header_bg};\n  color: {header_fg};\n  border: 1px solid {muted};\n  padding: 4px 6px;\n}}\nQLineEdit, QPlainTextEdit, QComboBox, QSpinBox, QDoubleSpinBox, QDateTimeEdit {{\n  background-color: {row_bg};\n  color: {foreground};\n  border: 1px solid {muted};\n}}\nQPushButton {{\n  background-color: {header_bg};\n  color: {header_fg};\n  border: 1px solid {muted};\n  padding: 4px 8px;\n}}\nQPushButton:hover {{\n  background-color: {accent};\n  color: {background};\n}}\n\"\"\"
+        return f"""\
+QTableWidget {{
+  background-color: {row_bg};
+  alternate-background-color: {alt_row_bg};
+  gridline-color: {muted};
+  color: {foreground};
+}}
+QHeaderView::section {{
+  background-color: {header_bg};
+  color: {header_fg};
+  border: 1px solid {muted};
+  padding: 4px 6px;
+}}
+QLineEdit, QPlainTextEdit, QComboBox, QSpinBox, QDoubleSpinBox, QDateTimeEdit {{
+  background-color: {row_bg};
+  color: {foreground};
+  border: 1px solid {muted};
+}}
+QPushButton {{
+  background-color: {header_bg};
+  color: {header_fg};
+  border: 1px solid {muted};
+  padding: 4px 8px;
+}}
+QPushButton:hover {{
+  background-color: {accent};
+  color: {background};
+}}
+"""
 
     def save_items(self, trigger_backup: bool = True) -> None:
         write_items(self.items_path, self.items)
@@ -1029,6 +1059,33 @@ class MoneyWidget(QtWidgets.QWidget):
         self.refresh()
 
 
+class ThemeWidget(QtWidgets.QWidget):
+    def __init__(self, main: MainWindow) -> None:
+        super().__init__()
+        self.main = main
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        layout = QtWidgets.QFormLayout(self)
+        layout.setLabelAlignment(QtCore.Qt.AlignLeft)
+        self.theme_combo = QtWidgets.QComboBox()
+        theme_names = sorted(self.main.config_manager.themes.keys())
+        self.theme_combo.addItems(theme_names)
+        current_theme = self.main.settings.get("themes", {}).get("default", "light")
+        if current_theme in theme_names:
+            self.theme_combo.setCurrentText(current_theme)
+        self.theme_combo.currentTextChanged.connect(self._set_theme)
+        layout.addRow("Theme", self.theme_combo)
+        hint = QtWidgets.QLabel("Changes apply immediately and are saved for future sessions.")
+        hint.setWordWrap(True)
+        layout.addRow("Notes", hint)
+
+    def _set_theme(self, name: str) -> None:
+        if not name:
+            return
+        self.main.apply_theme(name)
+
+
 class SettingsWidget(QtWidgets.QWidget):
     def __init__(self, main: MainWindow) -> None:
         super().__init__()
@@ -1042,15 +1099,6 @@ class SettingsWidget(QtWidgets.QWidget):
         self.autosave_check.setChecked(self.main.settings["ui"].get("autosave", True))
         self.autosave_check.stateChanged.connect(self._toggle_autosave)
         layout.addRow("Autosave", self.autosave_check)
-
-        self.theme_combo = QtWidgets.QComboBox()
-        theme_names = sorted(self.main.config_manager.themes.keys())
-        self.theme_combo.addItems(theme_names)
-        current_theme = self.main.settings.get("themes", {}).get("default", "light")
-        if current_theme in theme_names:
-            self.theme_combo.setCurrentText(current_theme)
-        self.theme_combo.currentTextChanged.connect(self._set_theme)
-        layout.addRow("Theme", self.theme_combo)
 
         backup_btn = QtWidgets.QPushButton("Backup now")
         backup_btn.clicked.connect(self._backup_now)
@@ -1080,11 +1128,6 @@ class SettingsWidget(QtWidgets.QWidget):
     def _toggle_autosave(self, state: int) -> None:
         self.main.settings["ui"]["autosave"] = bool(state)
         self.main.config_manager.save_settings()
-
-    def _set_theme(self, name: str) -> None:
-        if not name:
-            return
-        self.main.apply_theme(name)
 
     def _backup_now(self) -> None:
         try:
