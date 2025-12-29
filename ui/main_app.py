@@ -814,6 +814,30 @@ class MoneyWidget(QtWidgets.QWidget):
         summary.addStretch()
         layout.addLayout(summary)
 
+        breakdown_group = QtWidgets.QGroupBox("Category breakdowns (Source/Destination)")
+        breakdown_layout = QtWidgets.QHBoxLayout(breakdown_group)
+        expense_layout = QtWidgets.QVBoxLayout()
+        expense_layout.addWidget(QtWidgets.QLabel("Expenses"))
+        self.expense_breakdown_table = self._build_breakdown_table()
+        expense_layout.addWidget(self.expense_breakdown_table)
+        income_layout = QtWidgets.QVBoxLayout()
+        income_layout.addWidget(QtWidgets.QLabel("Income"))
+        self.income_breakdown_table = self._build_breakdown_table()
+        income_layout.addWidget(self.income_breakdown_table)
+        breakdown_layout.addLayout(expense_layout)
+        breakdown_layout.addLayout(income_layout)
+        layout.addWidget(breakdown_group)
+
+    def _build_breakdown_table(self) -> QtWidgets.QTableWidget:
+        table = QtWidgets.QTableWidget(0, 3)
+        table.setHorizontalHeaderLabels(["Category", "Amount", "Percent"])
+        table.horizontalHeader().setStretchLastSection(True)
+        table.setAlternatingRowColors(True)
+        table.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+        table.verticalHeader().setVisible(False)
+        table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        return table
+
     def _filtered_entries(self) -> List[MoneyRecord]:
         query = self.search_edit.text().strip().lower()
         type_mode = self.type_filter.currentText().lower()
@@ -845,11 +869,17 @@ class MoneyWidget(QtWidgets.QWidget):
         self.table.setRowCount(len(entries))
         income = 0.0
         expense = 0.0
+        expense_totals: Dict[str, float] = {}
+        income_totals: Dict[str, float] = {}
         for row, entry in enumerate(entries):
             if entry.entry_type.lower() == "income":
                 income += entry.amount
+                key = entry.source_or_destination.strip() or "Uncategorized"
+                income_totals[key] = income_totals.get(key, 0.0) + entry.amount
             elif entry.entry_type.lower() == "expense":
                 expense += entry.amount
+                key = entry.source_or_destination.strip() or "Uncategorized"
+                expense_totals[key] = expense_totals.get(key, 0.0) + entry.amount
             linked_display = id_to_product.get(entry.linked_item_id, entry.linked_item_id)
             values = [
                 entry.date.strftime(self.main.date_fmt),
@@ -866,6 +896,23 @@ class MoneyWidget(QtWidgets.QWidget):
         self.income_label.setText(f"Income: {self.main.currency_symbol}{income:.2f}")
         self.expense_label.setText(f"Expenses: {self.main.currency_symbol}{expense:.2f}")
         self.balance_label.setText(f"Balance: {self.main.currency_symbol}{balance:.2f}")
+        self._populate_breakdown(self.expense_breakdown_table, expense_totals, expense)
+        self._populate_breakdown(self.income_breakdown_table, income_totals, income)
+
+    def _populate_breakdown(
+        self, table: QtWidgets.QTableWidget, totals: Dict[str, float], total_amount: float
+    ) -> None:
+        items = sorted(totals.items(), key=lambda pair: pair[1], reverse=True)
+        table.setRowCount(len(items))
+        for row, (category, amount) in enumerate(items):
+            percent = (amount / total_amount * 100.0) if total_amount else 0.0
+            values = [
+                category,
+                f"{self.main.currency_symbol}{amount:.2f}",
+                f"{percent:.1f}%",
+            ]
+            for col, val in enumerate(values):
+                table.setItem(row, col, QtWidgets.QTableWidgetItem(val))
 
     def _selected_entry(self) -> Optional[MoneyRecord]:
         rows = self.table.selectionModel().selectedRows()
