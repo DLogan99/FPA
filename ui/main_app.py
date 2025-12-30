@@ -353,10 +353,44 @@ QTabBar::tab:selected {{
 QTabBar::tab:!selected {{
   margin-top: 2px;
 }}
+QGroupBox {{
+  border: 1px solid {muted};
+  border-radius: 4px;
+  margin-top: 12px;
+}}
+QGroupBox::title {{
+  subcontrol-origin: margin;
+  subcontrol-position: top left;
+  padding: 0 6px;
+  color: {header_fg};
+}}
+QCheckBox {{
+  color: {foreground};
+}}
+QCheckBox::indicator {{
+  width: 14px;
+  height: 14px;
+  border: 1px solid {muted};
+  background-color: {row_bg};
+}}
+QCheckBox::indicator:checked {{
+  background-color: {accent};
+  border-color: {accent};
+}}
 QLineEdit, QPlainTextEdit, QComboBox, QSpinBox, QDoubleSpinBox, QDateTimeEdit {{
   background-color: {row_bg};
   color: {foreground};
   border: 1px solid {muted};
+}}
+QComboBox::drop-down {{
+  border-left: 1px solid {muted};
+  width: 24px;
+}}
+QComboBox QAbstractItemView {{
+  background-color: {row_bg};
+  color: {foreground};
+  selection-background-color: {accent};
+  selection-color: {background};
 }}
 QPushButton {{
   background-color: {header_bg};
@@ -367,6 +401,39 @@ QPushButton {{
 QPushButton:hover {{
   background-color: {accent};
   color: {background};
+}}
+QMenu {{
+  background-color: {row_bg};
+  color: {foreground};
+  border: 1px solid {muted};
+}}
+QMenu::item:selected {{
+  background-color: {accent};
+  color: {background};
+}}
+QScrollBar:vertical {{
+  background: {background};
+  width: 10px;
+  margin: 0;
+}}
+QScrollBar::handle:vertical {{
+  background: {muted};
+  min-height: 20px;
+}}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+  height: 0px;
+}}
+QScrollBar:horizontal {{
+  background: {background};
+  height: 10px;
+  margin: 0;
+}}
+QScrollBar::handle:horizontal {{
+  background: {muted};
+  min-width: 20px;
+}}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+  width: 0px;
 }}
 """
 
