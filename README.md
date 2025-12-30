@@ -24,6 +24,23 @@ python app.py
 
 On Windows, prefer `pythonw.exe app.py` to avoid launching a console window when running the app directly.
 
+## Linux dependencies (PySide6/PyInstaller)
+If you see Qt plugin warnings about missing `libxcb*` or `libtiff` libraries on Linux, install these packages:
+
+```bash
+sudo apt-get install -y \
+  libxcb-icccm4 \
+  libxcb-image0 \
+  libxcb-keysyms1 \
+  libxcb-render-util0 \
+  libxcb-xkb1 \
+  libxcb-cursor0 \
+  libxcb-util1 \
+  libxcb-shape0 \
+  libxkbcommon-x11-0 \
+  libtiff5
+```
+
 ## Data locations
 - Config: `<data_dir>/settings.json`
 - Weights: `<data_dir>/weights.txt`
