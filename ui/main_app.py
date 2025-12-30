@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import ctypes
+import math
 import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
@@ -21,6 +22,70 @@ def _merge_by_id(existing, imported):
     for record in imported:
         merged[record.id] = record
     return list(merged.values())
+
+
+def _make_icon_pixmap(name: str, color: QtGui.QColor, size: int) -> QtGui.QPixmap:
+    pixmap = QtGui.QPixmap(size, size)
+    pixmap.fill(QtCore.Qt.transparent)
+    painter = QtGui.QPainter(pixmap)
+    painter.setRenderHint(QtGui.QPainter.Antialiasing)
+    pen = QtGui.QPen(color)
+    pen.setWidthF(max(1.6, size * 0.12))
+    pen.setCapStyle(QtCore.Qt.RoundCap)
+    pen.setJoinStyle(QtCore.Qt.RoundJoin)
+    painter.setPen(pen)
+    painter.setBrush(QtCore.Qt.NoBrush)
+
+    pad = size * 0.2
+    center = size / 2
+
+    if name == "add":
+        painter.drawLine(center, pad, center, size - pad)
+        painter.drawLine(pad, center, size - pad, center)
+    elif name == "edit":
+        painter.drawLine(pad, size - pad, size - pad, pad)
+        painter.drawLine(size - pad * 0.9, pad * 0.9, size - pad * 0.6, pad * 0.6)
+    elif name == "view":
+        rect = QtCore.QRectF(pad, size * 0.3, size - 2 * pad, size * 0.4)
+        painter.drawEllipse(rect)
+        painter.setBrush(color)
+        pupil = QtCore.QRectF(center - size * 0.08, center - size * 0.08, size * 0.16, size * 0.16)
+        painter.drawEllipse(pupil)
+        painter.setBrush(QtCore.Qt.NoBrush)
+    elif name == "delete":
+        body = QtCore.QRectF(pad * 1.2, pad * 1.6, size - 2 * pad * 1.2, size - 2 * pad * 1.6)
+        painter.drawRect(body)
+        painter.drawLine(pad, pad * 1.2, size - pad, pad * 1.2)
+        painter.drawLine(size * 0.4, pad * 0.8, size * 0.6, pad * 0.8)
+    elif name in {"import", "export"}:
+        tray = QtCore.QRectF(pad, size * 0.65, size - 2 * pad, size * 0.2)
+        painter.drawRect(tray)
+        if name == "import":
+            painter.drawLine(center, pad, center, size * 0.6)
+            painter.drawLine(center, size * 0.6, center - size * 0.12, size * 0.48)
+            painter.drawLine(center, size * 0.6, center + size * 0.12, size * 0.48)
+        else:
+            painter.drawLine(center, size * 0.6, center, pad)
+            painter.drawLine(center, pad, center - size * 0.12, pad + size * 0.12)
+            painter.drawLine(center, pad, center + size * 0.12, pad + size * 0.12)
+    elif name == "refresh":
+        rect = QtCore.QRectF(pad, pad, size - 2 * pad, size - 2 * pad)
+        start_angle = 40
+        span = 280
+        painter.drawArc(rect, start_angle * 16, span * 16)
+        angle = math.radians(start_angle)
+        radius = (size / 2) - pad
+        end_x = center + radius * math.cos(angle)
+        end_y = center - radius * math.sin(angle)
+        head = size * 0.12
+        painter.drawLine(end_x, end_y, end_x - head, end_y)
+        painter.drawLine(end_x, end_y, end_x, end_y + head)
+    elif name == "clear":
+        painter.drawLine(pad, pad, size - pad, size - pad)
+        painter.drawLine(size - pad, pad, pad, size - pad)
+
+    painter.end()
+    return pixmap
 
 
 def launch() -> None:
@@ -39,10 +104,12 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, config: ConfigManager) -> None:
         super().__init__()
         self.setWindowTitle("Finance Planner (Qt)")
+        self._icon_cache: Dict[str, QtGui.QIcon] = {}
         self.config_manager = config
         self.settings = config.settings
         self.weights = config.weights
         self.theme = config.get_theme()
+        self.apply_theme()
         self.items_path = self.settings["paths"]["items_csv"]
         self.money_path = self.settings["paths"]["money_csv"]
         self.backup_dir = self.settings["paths"]["backup_dir"]
@@ -61,9 +128,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tabs = QtWidgets.QTabWidget()
         self.purchases_tab = PurchasesWidget(self)
         self.money_tab = MoneyWidget(self)
+        self.theme_tab = ThemeWidget(self)
         self.settings_tab = SettingsWidget(self)
         self.tabs.addTab(self.purchases_tab, "Purchases")
         self.tabs.addTab(self.money_tab, "Money")
+        self.tabs.addTab(self.theme_tab, "Themes")
         self.tabs.addTab(self.settings_tab, "Settings")
         container = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(container)
@@ -182,6 +251,124 @@ class MainWindow(QtWidgets.QMainWindow):
     def _rescore_items(self) -> None:
         for item in self.items:
             item.overall_score = score_item(item, self.weights).overall
+
+    def apply_theme(self, name: Optional[str] = None) -> None:
+        theme_name = name or self.settings.get("themes", {}).get("default", "light")
+        if theme_name not in self.config_manager.themes:
+            theme_name = "light"
+            self.config_manager.set_default_theme(theme_name)
+        elif name is not None:
+            self.config_manager.set_default_theme(theme_name)
+        self.theme = self.config_manager.get_theme(theme_name)
+        self._apply_theme_palette(self.theme)
+        self._refresh_icons()
+
+    def _refresh_icons(self) -> None:
+        for name in ("purchases_tab", "money_tab", "settings_tab", "theme_tab"):
+            widget = getattr(self, name, None)
+            if widget is None:
+                continue
+            updater = getattr(widget, "update_icons", None)
+            if callable(updater):
+                updater()
+
+    def get_icon(self, name: str, size: int = 16) -> QtGui.QIcon:
+        color = QtGui.QColor(str(self.theme.get("foreground", "#000000")))
+        cache_key = f"{name}:{size}:{color.name()}"
+        cached = self._icon_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        pixmap = _make_icon_pixmap(name, color, size)
+        icon = QtGui.QIcon(pixmap)
+        self._icon_cache[cache_key] = icon
+        return icon
+
+    def _apply_theme_palette(self, theme: Dict[str, object]) -> None:
+        app = QtWidgets.QApplication.instance()
+        if app is None:
+            return
+        background = QtGui.QColor(str(theme.get("background", "#ffffff")))
+        foreground = QtGui.QColor(str(theme.get("foreground", "#000000")))
+        accent = QtGui.QColor(str(theme.get("accent", "#2563eb")))
+        muted = str(theme.get("muted", "#94a3b8"))
+        table = theme.get("table", {})
+        table = table if isinstance(table, dict) else {}
+        row_bg = QtGui.QColor(str(table.get("row_bg", theme.get("background", "#ffffff"))))
+        alt_row_bg = QtGui.QColor(str(table.get("alt_row_bg", theme.get("background", "#ffffff"))))
+
+        palette = app.palette()
+        palette.setColor(QtGui.QPalette.Window, background)
+        palette.setColor(QtGui.QPalette.WindowText, foreground)
+        palette.setColor(QtGui.QPalette.Base, row_bg)
+        palette.setColor(QtGui.QPalette.AlternateBase, alt_row_bg)
+        palette.setColor(QtGui.QPalette.Text, foreground)
+        palette.setColor(QtGui.QPalette.Button, background)
+        palette.setColor(QtGui.QPalette.ButtonText, foreground)
+        palette.setColor(QtGui.QPalette.Highlight, accent)
+        palette.setColor(QtGui.QPalette.HighlightedText, background)
+        app.setPalette(palette)
+        app.setStyleSheet(self._theme_stylesheet(theme, muted))
+
+    def _theme_stylesheet(self, theme: Dict[str, object], muted: str) -> str:
+        table = theme.get("table", {})
+        table = table if isinstance(table, dict) else {}
+        header_bg = table.get("header_bg", theme.get("background", "#ffffff"))
+        header_fg = table.get("header_fg", theme.get("foreground", "#000000"))
+        row_bg = table.get("row_bg", theme.get("background", "#ffffff"))
+        alt_row_bg = table.get("alt_row_bg", theme.get("background", "#ffffff"))
+        foreground = theme.get("foreground", "#000000")
+        accent = theme.get("accent", "#2563eb")
+        background = theme.get("background", "#ffffff")
+        return f"""\
+QTableWidget {{
+  background-color: {row_bg};
+  alternate-background-color: {alt_row_bg};
+  gridline-color: {muted};
+  color: {foreground};
+}}
+QHeaderView::section {{
+  background-color: {header_bg};
+  color: {header_fg};
+  border: 1px solid {muted};
+  padding: 4px 6px;
+}}
+QTabWidget {{
+  background-color: {background};
+}}
+QTabWidget::pane {{
+  border: 1px solid {muted};
+  background-color: {background};
+}}
+QTabBar::tab {{
+  background-color: {header_bg};
+  color: {header_fg};
+  border: 1px solid {muted};
+  border-bottom: none;
+  padding: 6px 10px;
+}}
+QTabBar::tab:selected {{
+  background-color: {accent};
+  color: {background};
+}}
+QTabBar::tab:!selected {{
+  margin-top: 2px;
+}}
+QLineEdit, QPlainTextEdit, QComboBox, QSpinBox, QDoubleSpinBox, QDateTimeEdit {{
+  background-color: {row_bg};
+  color: {foreground};
+  border: 1px solid {muted};
+}}
+QPushButton {{
+  background-color: {header_bg};
+  color: {header_fg};
+  border: 1px solid {muted};
+  padding: 4px 8px;
+}}
+QPushButton:hover {{
+  background-color: {accent};
+  color: {background};
+}}
+"""
 
     def save_items(self, trigger_backup: bool = True) -> None:
         write_items(self.items_path, self.items)
@@ -382,6 +569,7 @@ class PurchasesWidget(QtWidgets.QWidget):
         self.filter_combo.currentIndexChanged.connect(self.refresh)
         clear_btn = QtWidgets.QPushButton("Clear Filters")
         clear_btn.clicked.connect(self._clear_filters)
+        self._action_buttons: Dict[str, QtWidgets.QPushButton] = {"Clear Filters": clear_btn}
 
         for text, handler in [
             ("Add Item", self.add_item),
@@ -395,6 +583,7 @@ class PurchasesWidget(QtWidgets.QWidget):
             btn = QtWidgets.QPushButton(text)
             btn.clicked.connect(handler)
             controls.addWidget(btn)
+            self._action_buttons[text] = btn
 
         controls.addStretch()
         controls.addWidget(QtWidgets.QLabel("Filter"))
@@ -415,7 +604,7 @@ class PurchasesWidget(QtWidgets.QWidget):
         header = self.table.horizontalHeader()
         header.setSortIndicatorShown(True)
         header.sectionClicked.connect(self._handle_sort)
-        self.table.setSortingEnabled(True)
+        self.table.setSortingEnabled(False)
         layout.addWidget(self.table)
 
         summary = QtWidgets.QHBoxLayout()
@@ -426,6 +615,24 @@ class PurchasesWidget(QtWidgets.QWidget):
             summary.addWidget(lbl)
         summary.addStretch()
         layout.addLayout(summary)
+        self.update_icons()
+
+    def update_icons(self) -> None:
+        icon_map = {
+            "Add Item": "add",
+            "Edit": "edit",
+            "View": "view",
+            "Delete": "delete",
+            "Import": "import",
+            "Export": "export",
+            "Refresh": "refresh",
+            "Clear Filters": "clear",
+        }
+        for label, icon_name in icon_map.items():
+            btn = self._action_buttons.get(label)
+            if btn:
+                btn.setIcon(self.main.get_icon(icon_name))
+                btn.setIconSize(QtCore.QSize(16, 16))
 
     def _filtered_items(self) -> List[ItemRecord]:
         query = self.search_edit.text().strip().lower()
@@ -466,7 +673,6 @@ class PurchasesWidget(QtWidgets.QWidget):
             if item.overall_score is not None:
                 scored += 1
                 score_sum += item.overall_score
-        self.table.setSortingEnabled(True)
         sort_order = QtCore.Qt.AscendingOrder if self.main.item_sort_ascending else QtCore.Qt.DescendingOrder
         self.table.horizontalHeader().setSortIndicator(self.main.item_sort_column, sort_order)
         avg = score_sum / scored if scored else 0.0
@@ -692,6 +898,7 @@ class MoneyWidget(QtWidgets.QWidget):
         self.type_filter.currentIndexChanged.connect(self.refresh)
         clear_btn = QtWidgets.QPushButton("Clear Filters")
         clear_btn.clicked.connect(self._clear_filters)
+        self._action_buttons: Dict[str, QtWidgets.QPushButton] = {"Clear Filters": clear_btn}
 
         for text, handler in [
             ("Add Entry", self.add_entry),
@@ -704,6 +911,7 @@ class MoneyWidget(QtWidgets.QWidget):
             btn = QtWidgets.QPushButton(text)
             btn.clicked.connect(handler)
             controls.addWidget(btn)
+            self._action_buttons[text] = btn
 
         controls.addStretch()
         controls.addWidget(QtWidgets.QLabel("Type"))
@@ -724,7 +932,7 @@ class MoneyWidget(QtWidgets.QWidget):
         header = self.table.horizontalHeader()
         header.setSortIndicatorShown(True)
         header.sectionClicked.connect(self._handle_sort)
-        self.table.setSortingEnabled(True)
+        self.table.setSortingEnabled(False)
         layout.addWidget(self.table)
 
         summary = QtWidgets.QHBoxLayout()
@@ -735,6 +943,47 @@ class MoneyWidget(QtWidgets.QWidget):
             summary.addWidget(lbl)
         summary.addStretch()
         layout.addLayout(summary)
+
+        breakdown_group = QtWidgets.QGroupBox("Category breakdowns (Source/Destination)")
+        breakdown_layout = QtWidgets.QHBoxLayout(breakdown_group)
+        expense_layout = QtWidgets.QVBoxLayout()
+        expense_layout.addWidget(QtWidgets.QLabel("Expenses"))
+        self.expense_breakdown_table = self._build_breakdown_table()
+        expense_layout.addWidget(self.expense_breakdown_table)
+        income_layout = QtWidgets.QVBoxLayout()
+        income_layout.addWidget(QtWidgets.QLabel("Income"))
+        self.income_breakdown_table = self._build_breakdown_table()
+        income_layout.addWidget(self.income_breakdown_table)
+        breakdown_layout.addLayout(expense_layout)
+        breakdown_layout.addLayout(income_layout)
+        layout.addWidget(breakdown_group)
+        self.update_icons()
+
+    def update_icons(self) -> None:
+        icon_map = {
+            "Add Entry": "add",
+            "Edit": "edit",
+            "Delete": "delete",
+            "Import": "import",
+            "Export": "export",
+            "Refresh": "refresh",
+            "Clear Filters": "clear",
+        }
+        for label, icon_name in icon_map.items():
+            btn = self._action_buttons.get(label)
+            if btn:
+                btn.setIcon(self.main.get_icon(icon_name))
+                btn.setIconSize(QtCore.QSize(16, 16))
+
+    def _build_breakdown_table(self) -> QtWidgets.QTableWidget:
+        table = QtWidgets.QTableWidget(0, 3)
+        table.setHorizontalHeaderLabels(["Category", "Amount", "Percent"])
+        table.horizontalHeader().setStretchLastSection(True)
+        table.setAlternatingRowColors(True)
+        table.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+        table.verticalHeader().setVisible(False)
+        table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        return table
 
     def _filtered_entries(self) -> List[MoneyRecord]:
         query = self.search_edit.text().strip().lower()
@@ -767,11 +1016,17 @@ class MoneyWidget(QtWidgets.QWidget):
         self.table.setRowCount(len(entries))
         income = 0.0
         expense = 0.0
+        expense_totals: Dict[str, float] = {}
+        income_totals: Dict[str, float] = {}
         for row, entry in enumerate(entries):
             if entry.entry_type.lower() == "income":
                 income += entry.amount
+                key = entry.source_or_destination.strip() or "Uncategorized"
+                income_totals[key] = income_totals.get(key, 0.0) + entry.amount
             elif entry.entry_type.lower() == "expense":
                 expense += entry.amount
+                key = entry.source_or_destination.strip() or "Uncategorized"
+                expense_totals[key] = expense_totals.get(key, 0.0) + entry.amount
             linked_display = id_to_product.get(entry.linked_item_id, entry.linked_item_id)
             values = [
                 entry.date.strftime(self.main.date_fmt),
@@ -782,13 +1037,29 @@ class MoneyWidget(QtWidgets.QWidget):
             ]
             for col, val in enumerate(values):
                 self.table.setItem(row, col, QtWidgets.QTableWidgetItem(val))
-        self.table.setSortingEnabled(True)
         sort_order = QtCore.Qt.AscendingOrder if self.main.money_sort_ascending else QtCore.Qt.DescendingOrder
         self.table.horizontalHeader().setSortIndicator(self.main.money_sort_column, sort_order)
         balance = income - expense
         self.income_label.setText(f"Income: {self.main.currency_symbol}{income:.2f}")
         self.expense_label.setText(f"Expenses: {self.main.currency_symbol}{expense:.2f}")
         self.balance_label.setText(f"Balance: {self.main.currency_symbol}{balance:.2f}")
+        self._populate_breakdown(self.expense_breakdown_table, expense_totals, expense)
+        self._populate_breakdown(self.income_breakdown_table, income_totals, income)
+
+    def _populate_breakdown(
+        self, table: QtWidgets.QTableWidget, totals: Dict[str, float], total_amount: float
+    ) -> None:
+        items = sorted(totals.items(), key=lambda pair: pair[1], reverse=True)
+        table.setRowCount(len(items))
+        for row, (category, amount) in enumerate(items):
+            percent = (amount / total_amount * 100.0) if total_amount else 0.0
+            values = [
+                category,
+                f"{self.main.currency_symbol}{amount:.2f}",
+                f"{percent:.1f}%",
+            ]
+            for col, val in enumerate(values):
+                table.setItem(row, col, QtWidgets.QTableWidgetItem(val))
 
     def _selected_entry(self) -> Optional[MoneyRecord]:
         rows = self.table.selectionModel().selectedRows()
@@ -980,6 +1251,33 @@ class MoneyWidget(QtWidgets.QWidget):
         self.main._persist_sort_state("money_sort", self.main.money_sort_column, self.main.money_sort_ascending)
         self.main._sort_money()
         self.refresh()
+
+
+class ThemeWidget(QtWidgets.QWidget):
+    def __init__(self, main: MainWindow) -> None:
+        super().__init__()
+        self.main = main
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        layout = QtWidgets.QFormLayout(self)
+        layout.setLabelAlignment(QtCore.Qt.AlignLeft)
+        self.theme_combo = QtWidgets.QComboBox()
+        theme_names = sorted(self.main.config_manager.themes.keys())
+        self.theme_combo.addItems(theme_names)
+        current_theme = self.main.settings.get("themes", {}).get("default", "light")
+        if current_theme in theme_names:
+            self.theme_combo.setCurrentText(current_theme)
+        self.theme_combo.currentTextChanged.connect(self._set_theme)
+        layout.addRow("Theme", self.theme_combo)
+        hint = QtWidgets.QLabel("Changes apply immediately and are saved for future sessions.")
+        hint.setWordWrap(True)
+        layout.addRow("Notes", hint)
+
+    def _set_theme(self, name: str) -> None:
+        if not name:
+            return
+        self.main.apply_theme(name)
 
 
 class SettingsWidget(QtWidgets.QWidget):
