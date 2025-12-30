@@ -264,7 +264,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self._refresh_icons()
 
     def _refresh_icons(self) -> None:
-        for widget in (self.purchases_tab, self.money_tab, self.settings_tab, self.theme_tab):
+        for name in ("purchases_tab", "money_tab", "settings_tab", "theme_tab"):
+            widget = getattr(self, name, None)
+            if widget is None:
+                continue
             updater = getattr(widget, "update_icons", None)
             if callable(updater):
                 updater()
